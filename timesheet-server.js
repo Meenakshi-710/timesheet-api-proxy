@@ -53,7 +53,7 @@ app.get("/health", (req, res) => {
 });
 
 // Proxy to your main timesheet API
-const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "http://localhost:7000";
+const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
 
 // Create Timesheet Entry
 app.post("/api/v1/timesheet/createTimesheet", async (req, res) => {
