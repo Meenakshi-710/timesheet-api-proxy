@@ -1,0 +1,27 @@
+{
+  "name": "timesheet-api-proxy",
+  "version": "1.0.0",
+  "description": "Timesheet API proxy server for Chrome extension",
+  "main": "timesheet-server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node timesheet-server.js",
+    "dev": "node timesheet-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "timesheet",
+    "api",
+    "proxy",
+    "chrome-extension"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
