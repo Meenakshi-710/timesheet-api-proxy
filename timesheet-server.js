@@ -55,6 +55,12 @@ app.get("/health", (req, res) => {
 // Proxy to your main timesheet API
 const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
 
+// Validate API base URL
+if (!TIMESHEET_API_BASE) {
+  console.warn("⚠️  WARNING: TIMESHEET_API_URL environment variable is not set!");
+  console.warn("⚠️  Set it with: TIMESHEET_API_URL=https://your-api-url.com node timesheet-server.js");
+}
+
 // Create Timesheet Entry
 app.post("/api/v1/timesheet/createTimesheet", async (req, res) => {
   try {
