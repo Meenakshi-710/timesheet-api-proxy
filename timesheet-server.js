@@ -187,8 +187,10 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     console.log("⏰ Processing punch in request");
     console.log("🔑 Token:", mask(token));
     console.log("📋 Request body:", JSON.stringify(req.body, null, 2));
+    console.log("📋 Request headers:", req.headers);
 
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
+    console.log("🎯 Target URL:", targetUrl);
     
     const headers = {
       "Authorization": `Bearer ${token}`,
