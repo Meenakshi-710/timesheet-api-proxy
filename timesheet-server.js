@@ -172,64 +172,6 @@ app.get("/api/v1/timesheet/getTimesheetType", async (req, res) => {
   }
 });
 
-// Punch In - Attendance API
-app.post("/api/v1/attendance/punchIn", async (req, res) => {
-  try {
-    const { token, role } = extractCredentials(req);
-    
-    if (!token) {
-      return res.status(401).json({
-        error: "Authentication required",
-        message: "Provide Bearer token in Authorization header"
-      });
-    }
-
-    console.log("⏰ Processing punch in request");
-    console.log("🔑 Token:", mask(token));
-    console.log("📋 Request body:", JSON.stringify(req.body, null, 2));
-    console.log("📋 Request headers:", req.headers);
-
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
-    console.log("🎯 Target URL:", targetUrl);
-    
-    const headers = {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "Accept": "application/json"
-    };
-
-    if (role) {
-      headers["x-user-role"] = role;
-    }
-
-    const response = await fetch(targetUrl, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(req.body)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Punch in error:", response.status, errorText);
-      return res.status(response.status).json({
-        error: errorText,
-        status: response.status
-      });
-    }
-
-    const data = await response.json();
-    console.log("✅ Punch in successful");
-    return res.json(data);
-
-  } catch (err) {
-    console.error("❌ Punch in exception:", err);
-    return res.status(500).json({
-      error: String(err),
-      message: "Failed to process punch in request"
-    });
-  }
-});
-
 // Get All Timesheets of Employee
 app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
   try {
