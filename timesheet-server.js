@@ -257,6 +257,40 @@ app.post("/api/v1/timesheet/punchIn", async (req, res) => {
     console.log("👤 User ID:", userId);
     console.log("📋 Request body:", JSON.stringify(req.body, null, 2));
 
+    // Check if main API is configured
+    if (!TIMESHEET_API_BASE) {
+      console.log("⚠️  Main API not configured, returning mock response");
+      
+      // Return a mock successful response
+      const mockResponse = {
+        status: 201,
+        data: {
+          employee: userId,
+          date: new Date().toLocaleDateString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }),
+          punchIn: new Date().toLocaleString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            hour12: false,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          }),
+          breaks: []
+        },
+        message: "Punched in successfully (Mock Response)"
+      };
+      
+      console.log("✅ Mock punch in successful");
+      return res.json(mockResponse);
+    }
+
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/punchIn`;
     
     const headers = {
@@ -293,6 +327,104 @@ app.post("/api/v1/timesheet/punchIn", async (req, res) => {
     return res.status(500).json({
       error: String(err),
       message: "Failed to process punch in request"
+    });
+  }
+});
+
+// Punch Out
+app.post("/api/v1/timesheet/punchOut", async (req, res) => {
+  try {
+    const { token, userId, role } = extractCredentials(req);
+    
+    if (!token) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message: "Provide Bearer token in Authorization header"
+      });
+    }
+
+    if (!userId) {
+      return res.status(400).json({
+        error: "User ID required",
+        message: "Provide user ID in x-user-id header or request body"
+      });
+    }
+
+    console.log("⏰ Processing punch out request");
+    console.log("🔑 Token:", mask(token));
+    console.log("👤 User ID:", userId);
+    console.log("📋 Request body:", JSON.stringify(req.body, null, 2));
+
+    // Check if main API is configured
+    if (!TIMESHEET_API_BASE) {
+      console.log("⚠️  Main API not configured, returning mock response");
+      
+      // Return a mock successful response
+      const mockResponse = {
+        status: 201,
+        data: {
+          employee: userId,
+          date: new Date().toLocaleDateString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }),
+          punchOut: new Date().toLocaleString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            hour12: false,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          }),
+          totalHours: "8.00"
+        },
+        message: "Punched out successfully (Mock Response)"
+      };
+      
+      console.log("✅ Mock punch out successful");
+      return res.json(mockResponse);
+    }
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/punchOut`;
+    
+    const headers = {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    };
+
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(req.body)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Punch out error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    console.log("✅ Punch out successful");
+    return res.json(data);
+
+  } catch (err) {
+    console.error("❌ Punch out exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to process punch out request"
     });
   }
 });
