@@ -53,6 +53,64 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Test endpoint to check target API
+app.get("/test-target-api", async (req, res) => {
+  try {
+    console.log("🧪 Testing target API endpoint...");
+    
+    if (!TIMESHEET_API_BASE) {
+      return res.json({
+        error: "TIMESHEET_API_BASE not configured",
+        targetUrl: "undefined"
+      });
+    }
+
+    const testUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
+    console.log("🌐 Testing URL:", testUrl);
+
+    // Test with OPTIONS request first (CORS preflight)
+    const optionsResponse = await fetch(testUrl, {
+      method: "OPTIONS",
+      headers: {
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "Content-Type, Authorization"
+      }
+    });
+
+    console.log("📋 OPTIONS response status:", optionsResponse.status);
+    console.log("📋 OPTIONS response headers:", Object.fromEntries(optionsResponse.headers.entries()));
+
+    // Test with GET request to see if endpoint exists
+    const getResponse = await fetch(testUrl, {
+      method: "GET"
+    });
+
+    console.log("📋 GET response status:", getResponse.status);
+    console.log("📋 GET response headers:", Object.fromEntries(getResponse.headers.entries()));
+
+    const getResponseText = await getResponse.text();
+    console.log("📋 GET response body:", getResponseText);
+
+    res.json({
+      targetUrl: testUrl,
+      optionsStatus: optionsResponse.status,
+      getStatus: getResponse.status,
+      getResponse: getResponseText.substring(0, 500), // Limit response length
+      headers: {
+        options: Object.fromEntries(optionsResponse.headers.entries()),
+        get: Object.fromEntries(getResponse.headers.entries())
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Test error:", error);
+    res.status(500).json({
+      error: error.message,
+      targetUrl: `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`
+    });
+  }
+});
+
 // Proxy to your main timesheet API
 const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
 
@@ -265,6 +323,19 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
 
     console.log("📍 Location:", { latitude, longitude });
 
+    // Check if API base URL is configured
+    if (!TIMESHEET_API_BASE) {
+      console.error("❌ TIMESHEET_API_BASE is not configured!");
+      return res.status(500).json({
+        error: "Server configuration error",
+        message: "TIMESHEET_API_URL environment variable is not set",
+        details: {
+          hasApiBase: false,
+          targetUrl: "undefined/api/v1/attendance/punchIn"
+        }
+      });
+    }
+
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
     
     console.log("🌐 Target URL:", targetUrl);
@@ -273,11 +344,18 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     const headers = {
       "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
-      "Accept": "application/json"
+      "Accept": "application/json",
+      "User-Agent": "Timesheet-Proxy-Server/1.0.0"
     };
 
     if (role) {
       headers["x-user-role"] = role;
+    }
+
+    // Add user ID to headers if available (extract from token or request)
+    const extractedUserId = req.body?.userId || req.headers['x-user-id'] || userId;
+    if (extractedUserId) {
+      headers["x-user-id"] = extractedUserId;
     }
 
     console.log("📤 Forwarding request to target API with headers:", headers);
@@ -295,9 +373,25 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("❌ Punch in error:", response.status, errorText);
+      console.error("❌ Full error details:", {
+        status: response.status,
+        statusText: response.statusText,
+        url: targetUrl,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: errorText
+      });
+      
+      // Return more detailed error information
       return res.status(response.status).json({
         error: errorText,
-        status: response.status
+        status: response.status,
+        details: {
+          targetUrl: targetUrl,
+          apiBase: TIMESHEET_API_BASE,
+          hasApiBase: !!TIMESHEET_API_BASE,
+          tokenProvided: !!token,
+          tokenLength: token ? token.length : 0
+        }
       });
     }
 
