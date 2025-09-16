@@ -238,7 +238,15 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
     
+    console.log("📍 Punch In request received");
+    console.log("🔑 Token:", mask(token));
+    console.log("👤 User ID:", userId);
+    console.log("👤 Role:", role);
+    console.log("📋 Request headers:", req.headers);
+    console.log("📋 Request body:", req.body);
+    
     if (!token) {
+      console.log("❌ No token provided");
       return res.status(401).json({
         error: "Authentication required",
         message: "Provide Bearer token in Authorization header"
@@ -248,18 +256,19 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     const { latitude, longitude } = req.body;
 
     if (!latitude || !longitude) {
+      console.log("❌ Missing location data");
       return res.status(400).json({
         error: "Location required",
         message: "Both latitude and longitude are required"
       });
     }
 
-    console.log("📍 Punch In request");
-    console.log("🔑 Token:", mask(token));
-    console.log("👤 User ID:", userId);
     console.log("📍 Location:", { latitude, longitude });
 
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
+    
+    console.log("🌐 Target URL:", targetUrl);
+    console.log("🔧 TIMESHEET_API_BASE:", TIMESHEET_API_BASE);
     
     const headers = {
       "Authorization": `Bearer ${token}`,
@@ -271,11 +280,17 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
       headers["x-user-role"] = role;
     }
 
+    console.log("📤 Forwarding request to target API with headers:", headers);
+    console.log("📤 Request body:", { latitude, longitude });
+
     const response = await fetch(targetUrl, {
       method: "POST",
       headers,
       body: JSON.stringify({ latitude, longitude })
     });
+
+    console.log("📥 Target API response status:", response.status);
+    console.log("📥 Target API response headers:", Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
