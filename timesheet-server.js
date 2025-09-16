@@ -37,101 +37,6 @@ function extractCredentials(req) {
   return { token, userId, role };
 }
 
-// Location validation functions
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000; // Earth's radius in meters
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-function getAllowedLocations() {
-  const locations = [];
-
-  // Default office location (Jodhpur)
-  const defaultLat = parseFloat(process.env.LATITUDE || '26.257544');
-  const defaultLng = parseFloat(process.env.LONGITUDE || '73.009617');
-  const defaultRadius = parseInt(process.env.RADIUS || '100');
-
-  if (!isNaN(defaultLat) && !isNaN(defaultLng) && !isNaN(defaultRadius)) {
-    locations.push({
-      latitude: defaultLat,
-      longitude: defaultLng,
-      radius: defaultRadius,
-      name: 'Default Office (Jodhpur)'
-    });
-  }
-
-  // Mumbai office location
-  const mumbaiLat = parseFloat(process.env.MUMBAI_LATITUDE || '19.184251792428768');
-  const mumbaiLng = parseFloat(process.env.MUMBAI_LONGITUDE || '72.8313642');
-  const mumbaiRadius = parseInt(process.env.MUMBAI_RADIUS || '100');
-
-  if (!isNaN(mumbaiLat) && !isNaN(mumbaiLng) && !isNaN(mumbaiRadius)) {
-    locations.push({
-      latitude: mumbaiLat,
-      longitude: mumbaiLng,
-      radius: mumbaiRadius,
-      name: 'Mumbai Office'
-    });
-  }
-
-  return locations;
-}
-
-function validateLocation(userLat, userLng) {
-  const allowedLocations = getAllowedLocations();
-
-  if (allowedLocations.length === 0) {
-    return {
-      isValid: false,
-      error: 'No allowed locations configured. Please contact your administrator.'
-    };
-  }
-
-  let nearestLocation;
-  let minDistance = Infinity;
-
-  // Check distance to each allowed location
-  for (const location of allowedLocations) {
-    const distance = calculateDistance(
-      userLat,
-      userLng,
-      location.latitude,
-      location.longitude
-    );
-
-    if (distance < minDistance) {
-      minDistance = distance;
-      nearestLocation = location;
-    }
-
-    // If within radius, location is valid
-    if (distance <= location.radius) {
-      return {
-        isValid: true,
-        nearestLocation: location,
-        distance: Math.round(distance)
-      };
-    }
-  }
-
-  // If not within any allowed location
-  return {
-    isValid: false,
-    nearestLocation,
-    distance: Math.round(minDistance),
-    error: `You are ${Math.round(minDistance)}m away from the nearest allowed location (${nearestLocation?.name}). Please move within ${nearestLocation?.radius}m of an office location to punch in.`
-  };
-}
-
 // Simple request logger
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -146,28 +51,6 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
     version: "1.0.0"
   });
-});
-
-// Get allowed locations for punch in
-app.get("/api/v1/locations/allowed", (req, res) => {
-  try {
-    const allowedLocations = getAllowedLocations();
-    
-    res.json({
-      success: true,
-      data: {
-        allowedLocations,
-        totalLocations: allowedLocations.length
-      },
-      message: "Allowed locations retrieved successfully"
-    });
-  } catch (error) {
-    console.error("❌ Get allowed locations error:", error);
-    res.status(500).json({
-      error: "Failed to retrieve allowed locations",
-      message: error.message
-    });
-  }
 });
 
 // Test endpoint to check target API
@@ -680,26 +563,6 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     }
 
     console.log("📍 Location:", { latitude, longitude });
-
-    // Validate location against allowed locations
-    const locationValidation = validateLocation(latitude, longitude);
-    if (!locationValidation.isValid) {
-      console.log("❌ Location validation failed:", locationValidation.error);
-      return res.status(403).json({
-        error: "Location not allowed",
-        message: locationValidation.error,
-        details: {
-          userLocation: { latitude, longitude },
-          nearestLocation: locationValidation.nearestLocation,
-          distance: locationValidation.distance
-        }
-      });
-    }
-
-    console.log("✅ Location validation passed:", {
-      location: locationValidation.nearestLocation?.name,
-      distance: locationValidation.distance + "m"
-    });
 
     // Check if API base URL is configured
     if (!TIMESHEET_API_BASE) {
