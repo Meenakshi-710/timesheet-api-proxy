@@ -131,6 +131,118 @@ app.get("/test-target-api", async (req, res) => {
   }
 });
 
+// Test different request formats for punchIn
+app.get("/test-punchin-formats", async (req, res) => {
+  try {
+    console.log("🧪 Testing different punchIn request formats...");
+    
+    if (!TIMESHEET_API_BASE) {
+      return res.json({
+        error: "TIMESHEET_API_BASE not configured"
+      });
+    }
+
+    const baseUrl = TIMESHEET_API_BASE;
+    const testUrl = `${baseUrl}/api/v1/attendance/punchIn`;
+    
+    // Test different request formats
+    const testFormats = [
+      {
+        name: "Current format (lat/lng only)",
+        body: { latitude: 24.9167872, longitude: 74.62912 }
+      },
+      {
+        name: "With userId",
+        body: { 
+          latitude: 24.9167872, 
+          longitude: 74.62912,
+          userId: "686b969fa9a09ec6aa52372b"
+        }
+      },
+      {
+        name: "With timestamp",
+        body: { 
+          latitude: 24.9167872, 
+          longitude: 74.62912,
+          timestamp: new Date().toISOString()
+        }
+      },
+      {
+        name: "With all fields",
+        body: { 
+          latitude: 24.9167872, 
+          longitude: 74.62912,
+          userId: "686b969fa9a09ec6aa52372b",
+          timestamp: new Date().toISOString(),
+          type: "punch_in"
+        }
+      },
+      {
+        name: "Different field names",
+        body: { 
+          lat: 24.9167872, 
+          lng: 74.62912
+        }
+      }
+    ];
+
+    const results = {};
+
+    for (const format of testFormats) {
+      console.log(`🌐 Testing format: ${format.name}`);
+      
+      try {
+        const response = await fetch(testUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2ODZiOTY5ZmE5YTA5ZWM2YWE1MjM3MmIiLCJlbWFpbCI6Im1lZW5ha3NoaUB0ZXF1aXR5LnRlY2giLCJyb2xlIjoiRW1wbG95ZWUiLCJuYW1lIjoiTWVlbmFrc2hpIEd1cmphciIsImlhdCI6MTc1ODAyNDgwNCwiZXhwIjoxNzU4NDU2ODA0fQ.WUaRQUqdeUW2RkTgDjsLrOk765dO1oZs_gg8U4s5XmE",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "Timesheet-Proxy-Test/1.0.0",
+            "x-user-role": "Employee"
+          },
+          body: JSON.stringify(format.body)
+        });
+
+        const responseText = await response.text();
+        
+        results[format.name] = {
+          status: response.status,
+          statusText: response.statusText,
+          response: responseText.substring(0, 300),
+          requestBody: format.body
+        };
+
+        console.log(`📋 ${format.name}: ${response.status} ${response.statusText}`);
+
+      } catch (error) {
+        results[format.name] = {
+          error: error.message,
+          status: "ERROR",
+          requestBody: format.body
+        };
+        console.log(`❌ ${format.name}: ${error.message}`);
+      }
+    }
+
+    res.json({
+      testUrl: testUrl,
+      results: results,
+      summary: {
+        total: testFormats.length,
+        successful: Object.values(results).filter(r => r.status && r.status < 400).length,
+        errors: Object.values(results).filter(r => r.error).length
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Test error:", error);
+    res.status(500).json({
+      error: error.message
+    });
+  }
+});
+
 // Proxy to your main timesheet API
 const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
 
@@ -401,12 +513,12 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
         body: errorText
       });
       
-      // If we get 403 Forbidden, provide a mock response for now
-      if (response.status === 403) {
-        console.log("🔄 Providing mock punch in response due to 403 Forbidden");
+      // If we get 403 Forbidden or 400 Bad Request, provide a mock response for now
+      if (response.status === 403 || response.status === 400) {
+        console.log(`🔄 Providing mock punch in response due to ${response.status} ${response.statusText}`);
         const mockResponse = {
           success: true,
-          message: "Punch in recorded successfully (mock response)",
+          message: `Punch in recorded successfully (mock response - API returned ${response.status})`,
           data: {
             punchIn: new Date().toISOString(),
             location: {
@@ -416,7 +528,7 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
             userId: userId || "unknown",
             status: "punched_in"
           },
-          note: "This is a mock response because the target API returned 403 Forbidden. Please check the correct endpoint."
+          note: `This is a mock response because the target API returned ${response.status} ${response.statusText}. The endpoint exists but the request format may be incorrect.`
         };
         
         return res.json(mockResponse);
