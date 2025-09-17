@@ -967,33 +967,18 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
       });
     }
 
-    // Create a timesheet entry for punch in
-    const currentTime = new Date();
-    const timesheetData = {
-      projectName: "Attendance",
-      task: "Punch In",
-      subtasks: [
-        {
-          name: `Punched in at ${currentTime.toLocaleTimeString()}`,
-          status: "completed"
-        }
-      ],
-      hours: 0, // Will be calculated when punching out
-      date: currentTime.toISOString().split('T')[0], // YYYY-MM-DD format
-      location: {
-        latitude: latitude,
-        longitude: longitude,
-        validation: locationValidation
-      },
-      type: "punch_in",
-      timestamp: currentTime.toISOString()
+    // Use the correct punch in endpoint format
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
+    
+    // The target API expects simple latitude/longitude format
+    const punchInData = {
+      latitude: latNum,
+      longitude: lngNum
     };
-
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheet`;
     
     console.log("🌐 Target URL:", targetUrl);
     console.log("🔧 TIMESHEET_API_BASE:", TIMESHEET_API_BASE);
-    console.log("📤 Timesheet data:", timesheetData);
+    console.log("📤 Punch in data:", punchInData);
     
     const headers = {
       "Authorization": `Bearer ${token}`,
@@ -1017,7 +1002,7 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     const response = await fetch(targetUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify(timesheetData)
+      body: JSON.stringify(punchInData)
     });
 
     console.log("📥 Target API response status:", response.status);
@@ -1048,24 +1033,10 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     }
 
     const data = await response.json();
-    console.log("✅ Punch in successful");
+    console.log("✅ Punch in successful:", data);
     
-    // Return a punch in specific response
-    return res.json({
-      success: true,
-      message: "Punch in recorded successfully",
-      data: {
-        punchIn: currentTime.toISOString(),
-        location: {
-          latitude: latitude,
-          longitude: longitude,
-          validation: locationValidation
-        },
-        userId: extractedUserId || "unknown",
-        status: "punched_in",
-        timesheetEntry: data
-      }
-    });
+    // Return the response from the target API directly
+    return res.status(response.status).json(data);
 
   } catch (err) {
     console.error("❌ Punch in exception:", err);
@@ -1113,32 +1084,19 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
       });
     }
 
-    // Create a timesheet entry for punch out
-    const currentTime = new Date();
-    const timesheetData = {
-      projectName: "Attendance",
-      task: "Punch Out",
-      subtasks: [
-        {
-          name: `Punched out at ${currentTime.toLocaleTimeString()}`,
-          status: "completed"
-        }
-      ],
-      hours: 0, // This would ideally be calculated based on punch in time
-      date: currentTime.toISOString().split('T')[0], // YYYY-MM-DD format
-      location: latitude && longitude ? {
-        latitude: latitude,
-        longitude: longitude
-      } : null,
-      type: "punch_out",
-      timestamp: currentTime.toISOString()
-    };
-
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheet`;
+    // Use the correct punch out endpoint format
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchOut`;
+    
+    // The target API expects simple latitude/longitude format (optional for punch out)
+    const punchOutData = {};
+    if (latitude && longitude) {
+      punchOutData.latitude = parseFloat(latitude);
+      punchOutData.longitude = parseFloat(longitude);
+    }
     
     console.log("🌐 Target URL:", targetUrl);
     console.log("🔧 TIMESHEET_API_BASE:", TIMESHEET_API_BASE);
-    console.log("📤 Timesheet data:", timesheetData);
+    console.log("📤 Punch out data:", punchOutData);
     
     const headers = {
       "Authorization": `Bearer ${token}`,
@@ -1162,7 +1120,7 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
     const response = await fetch(targetUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify(timesheetData)
+      body: JSON.stringify(punchOutData)
     });
 
     console.log("📥 Target API response status:", response.status);
@@ -1193,23 +1151,10 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
     }
 
     const data = await response.json();
-    console.log("✅ Punch out successful");
+    console.log("✅ Punch out successful:", data);
     
-    // Return a punch out specific response
-    return res.json({
-      success: true,
-      message: "Punch out recorded successfully",
-      data: {
-        punchOut: currentTime.toISOString(),
-        location: latitude && longitude ? {
-          latitude: latitude,
-          longitude: longitude
-        } : null,
-        userId: extractedUserId || "unknown",
-        status: "punched_out",
-        timesheetEntry: data
-      }
-    });
+    // Return the response from the target API directly
+    return res.status(response.status).json(data);
 
   } catch (err) {
     console.error("❌ Punch out exception:", err);
