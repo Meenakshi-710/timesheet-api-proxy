@@ -240,6 +240,46 @@ app.get("/test-punchout-formats", async (req, res) => {
   }
 });
 
+// Test location validation
+app.get("/test-location-validation", (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+    
+    if (!lat || !lng) {
+      return res.status(400).json({
+        error: "Missing coordinates",
+        message: "Provide lat and lng query parameters",
+        example: "/test-location-validation?lat=26.257544&lng=73.009617"
+      });
+    }
+
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+
+    if (isNaN(latitude) || isNaN(longitude)) {
+      return res.status(400).json({
+        error: "Invalid coordinates",
+        message: "Latitude and longitude must be valid numbers"
+      });
+    }
+
+    const validation = validateLocation(latitude, longitude);
+    
+    res.json({
+      userLocation: { latitude, longitude },
+      validation,
+      locationConfig: LOCATION_CONFIG,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error("❌ Location validation test error:", error);
+    res.status(500).json({
+      error: error.message
+    });
+  }
+});
+
 // Test different request formats for punchIn
 app.get("/test-punchin-formats", async (req, res) => {
   try {
@@ -355,10 +395,99 @@ app.get("/test-punchin-formats", async (req, res) => {
 // Proxy to your main timesheet API
 const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
 
+// Location validation configuration
+const LOCATION_CONFIG = {
+  // Default location (Jodhpur)
+  DEFAULT_LATITUDE: parseFloat(process.env.LATITUDE) || 26.257544,
+  DEFAULT_LONGITUDE: parseFloat(process.env.LONGITUDE) || 73.009617,
+  DEFAULT_RADIUS: parseFloat(process.env.RADIUS) || 100, // in meters
+  
+  // Mumbai location
+  MUMBAI_LATITUDE: parseFloat(process.env.MUMBAI_LATITUDE) || 19.184251792428768,
+  MUMBAI_LONGITUDE: parseFloat(process.env.MUMBAI_LONGITUDE) || 72.8313642,
+  MUMBAI_RADIUS: parseFloat(process.env.MUMBAI_RADIUS) || 100 // in meters
+};
+
 // Validate API base URL
 if (!TIMESHEET_API_BASE) {
   console.warn("⚠️  WARNING: TIMESHEET_API_URL environment variable is not set!");
   console.warn("⚠️  Set it with: TIMESHEET_API_URL=https://your-api-url.com node timesheet-server.js");
+}
+
+// Utility function to calculate distance between two coordinates using Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Earth's radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const distance = R * c; // Distance in meters
+  return distance;
+}
+
+// Function to validate if the provided coordinates are within allowed locations
+function validateLocation(userLatitude, userLongitude) {
+  const locations = [
+    {
+      name: "Default Office",
+      latitude: LOCATION_CONFIG.DEFAULT_LATITUDE,
+      longitude: LOCATION_CONFIG.DEFAULT_LONGITUDE,
+      radius: LOCATION_CONFIG.DEFAULT_RADIUS
+    },
+    {
+      name: "Mumbai Office",
+      latitude: LOCATION_CONFIG.MUMBAI_LATITUDE,
+      longitude: LOCATION_CONFIG.MUMBAI_LONGITUDE,
+      radius: LOCATION_CONFIG.MUMBAI_RADIUS
+    }
+  ];
+
+  for (const location of locations) {
+    const distance = calculateDistance(
+      userLatitude, 
+      userLongitude, 
+      location.latitude, 
+      location.longitude
+    );
+    
+    if (distance <= location.radius) {
+      return {
+        isValid: true,
+        matchedLocation: location.name,
+        distance: Math.round(distance),
+        allowedRadius: location.radius
+      };
+    }
+  }
+
+  // Find the closest location for error reporting
+  let closestLocation = null;
+  let minDistance = Infinity;
+  
+  for (const location of locations) {
+    const distance = calculateDistance(
+      userLatitude, 
+      userLongitude, 
+      location.latitude, 
+      location.longitude
+    );
+    
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestLocation = location;
+    }
+  }
+
+  return {
+    isValid: false,
+    closestLocation: closestLocation?.name || "Unknown",
+    distance: Math.round(minDistance),
+    allowedRadius: closestLocation?.radius || 100,
+    message: `You are ${Math.round(minDistance)}m away from the nearest allowed location (${closestLocation?.name}). Maximum allowed distance is ${closestLocation?.radius}m.`
+  };
 }
 
 // Create Timesheet Entry
@@ -564,6 +693,30 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
 
     console.log("📍 Location:", { latitude, longitude });
 
+    // Validate location coordinates
+    const locationValidation = validateLocation(latitude, longitude);
+    
+    if (!locationValidation.isValid) {
+      console.log("❌ Location validation failed:", locationValidation.message);
+      return res.status(403).json({
+        error: "Location not allowed",
+        message: locationValidation.message,
+        details: {
+          userLocation: { latitude, longitude },
+          closestLocation: locationValidation.closestLocation,
+          distance: locationValidation.distance,
+          allowedRadius: locationValidation.allowedRadius,
+          validationFailed: true
+        }
+      });
+    }
+
+    console.log("✅ Location validation passed:", {
+      matchedLocation: locationValidation.matchedLocation,
+      distance: locationValidation.distance,
+      allowedRadius: locationValidation.allowedRadius
+    });
+
     // Check if API base URL is configured
     if (!TIMESHEET_API_BASE) {
       console.error("❌ TIMESHEET_API_BASE is not configured!");
@@ -632,7 +785,8 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
             punchIn: new Date().toISOString(),
             location: {
               latitude: latitude,
-              longitude: longitude
+              longitude: longitude,
+              validation: locationValidation
             },
             userId: userId || "unknown",
             status: "punched_in"
