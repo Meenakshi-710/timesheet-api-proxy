@@ -53,6 +53,45 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Office configuration endpoint
+app.get("/api/v1/office-config", (req, res) => {
+  try {
+    const config = {
+      data: {
+        mainOffice: {
+          latitude: LOCATION_CONFIG.DEFAULT_LATITUDE,
+          longitude: LOCATION_CONFIG.DEFAULT_LONGITUDE,
+          radius: LOCATION_CONFIG.DEFAULT_RADIUS,
+          name: "Default Office",
+          configured: true
+        },
+        mumbaiOffice: {
+          latitude: LOCATION_CONFIG.MUMBAI_LATITUDE,
+          longitude: LOCATION_CONFIG.MUMBAI_LONGITUDE,
+          radius: LOCATION_CONFIG.MUMBAI_RADIUS,
+          name: "Mumbai Office",
+          configured: true
+        },
+        currentLocation: {
+          latitude: LOCATION_CONFIG.CURRENT_LATITUDE,
+          longitude: LOCATION_CONFIG.CURRENT_LONGITUDE,
+          radius: LOCATION_CONFIG.CURRENT_RADIUS,
+          name: "Current Location",
+          configured: true
+        }
+      }
+    };
+    
+    res.json(config);
+  } catch (error) {
+    console.error("❌ Office config error:", error);
+    res.status(500).json({
+      error: "Failed to get office configuration",
+      message: String(error)
+    });
+  }
+});
+
 // Test endpoint to check target API
 app.get("/test-target-api", async (req, res) => {
   try {
@@ -405,7 +444,12 @@ const LOCATION_CONFIG = {
   // Mumbai location
   MUMBAI_LATITUDE: parseFloat(process.env.MUMBAI_LATITUDE) || 19.184251792428768,
   MUMBAI_LONGITUDE: parseFloat(process.env.MUMBAI_LONGITUDE) || 72.8313642,
-  MUMBAI_RADIUS: parseFloat(process.env.MUMBAI_RADIUS) || 100 // in meters
+  MUMBAI_RADIUS: parseFloat(process.env.MUMBAI_RADIUS) || 100, // in meters
+  
+  // Current location (where you are now)
+  CURRENT_LATITUDE: parseFloat(process.env.CURRENT_LATITUDE) || 24.9167872,
+  CURRENT_LONGITUDE: parseFloat(process.env.CURRENT_LONGITUDE) || 74.62912,
+  CURRENT_RADIUS: parseFloat(process.env.CURRENT_RADIUS) || 100 // in meters
 };
 
 // Validate API base URL
@@ -442,6 +486,12 @@ function validateLocation(userLatitude, userLongitude) {
       latitude: LOCATION_CONFIG.MUMBAI_LATITUDE,
       longitude: LOCATION_CONFIG.MUMBAI_LONGITUDE,
       radius: LOCATION_CONFIG.MUMBAI_RADIUS
+    },
+    {
+      name: "Current Location",
+      latitude: LOCATION_CONFIG.CURRENT_LATITUDE,
+      longitude: LOCATION_CONFIG.CURRENT_LONGITUDE,
+      radius: LOCATION_CONFIG.CURRENT_RADIUS
     }
   ];
 
