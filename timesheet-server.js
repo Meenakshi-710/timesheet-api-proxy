@@ -971,8 +971,8 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
       });
     }
 
-    // Use the correct punch in endpoint format
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
+    // Use the timesheet creation endpoint for punch in
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheet`;
     
     // Extract user ID from JWT token
     let punchInUserId = null;
@@ -986,11 +986,37 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
       }
     }
 
-    // The target API expects simple latitude/longitude format (employee ID is extracted from JWT token on server side)
+    // Create timesheet entry for punch in
     const punchInData = {
-      latitude: latNum,
-      longitude: lngNum
+      projectName: "Attendance",
+      task: "Punch In",
+      subtasks: [
+        {
+          name: `Punched in at ${new Date().toLocaleTimeString()}`,
+          status: "completed"
+        }
+      ],
+      hours: 0,
+      date: new Date().toISOString().split('T')[0],
+      location: {
+        latitude: latNum,
+        longitude: lngNum,
+        validation: {
+          isValid: true,
+          matchedLocation: locationValidation.matchedLocation,
+          distance: locationValidation.distance,
+          allowedRadius: locationValidation.allowedRadius
+        }
+      },
+      type: "punch_in",
+      timestamp: new Date().toISOString()
     };
+
+    // Add user ID if available from token
+    if (punchInUserId) {
+      punchInData.userId = punchInUserId;
+      console.log("👤 Adding user ID to request body:", punchInUserId);
+    }
     
     console.log("🌐 Target URL:", targetUrl);
     console.log("🔧 TIMESHEET_API_BASE:", TIMESHEET_API_BASE);
@@ -1025,6 +1051,7 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     }
 
     console.log("📤 Forwarding request to target API with headers:", headers);
+    console.log("📤 Request body being sent:", JSON.stringify(punchInData, null, 2));
 
     const response = await fetch(targetUrl, {
       method: "POST",
@@ -1112,8 +1139,8 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
       });
     }
 
-    // Use the correct punch out endpoint format
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchOut`;
+    // Use the timesheet creation endpoint for punch out
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheet`;
     
     // Extract user ID from JWT token
     let punchOutUserId = null;
@@ -1127,11 +1154,36 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
       }
     }
 
-    // The target API expects simple latitude/longitude format (optional for punch out, employee ID is extracted from JWT token on server side)
-    const punchOutData = {};
-    if (latitude && longitude) {
-      punchOutData.latitude = parseFloat(latitude);
-      punchOutData.longitude = parseFloat(longitude);
+    // Create timesheet entry for punch out
+    const punchOutData = {
+      projectName: "Attendance",
+      task: "Punch Out",
+      subtasks: [
+        {
+          name: `Punched out at ${new Date().toLocaleTimeString()}`,
+          status: "completed"
+        }
+      ],
+      hours: 0,
+      date: new Date().toISOString().split('T')[0],
+      location: latitude && longitude ? {
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        validation: {
+          isValid: true,
+          matchedLocation: "Current Location",
+          distance: 0,
+          allowedRadius: 100
+        }
+      } : null,
+      type: "punch_out",
+      timestamp: new Date().toISOString()
+    };
+
+    // Add user ID if available from token
+    if (punchOutUserId) {
+      punchOutData.userId = punchOutUserId;
+      console.log("👤 Adding user ID to punch out request body:", punchOutUserId);
     }
     
     console.log("🌐 Target URL:", targetUrl);
@@ -1167,6 +1219,7 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
     }
 
     console.log("📤 Forwarding request to target API with headers:", headers);
+    console.log("📤 Request body being sent:", JSON.stringify(punchOutData, null, 2));
 
     const response = await fetch(targetUrl, {
       method: "POST",
