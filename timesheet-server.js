@@ -519,6 +519,88 @@ app.get("/test-punchin-formats", async (req, res) => {
   }
 });
 
+// Test the actual timesheet creation format that's being sent
+app.get("/test-actual-timesheet-format", async (req, res) => {
+  try {
+    console.log("🧪 Testing actual timesheet creation format...");
+    
+    if (!TIMESHEET_API_BASE) {
+      return res.json({
+        error: "TIMESHEET_API_BASE not configured"
+      });
+    }
+
+    const baseUrl = TIMESHEET_API_BASE;
+    const testUrl = `${baseUrl}/api/v1/timesheet/createTimesheet`;
+    
+    // This is the exact format being sent by the punch in endpoint
+    const timesheetData = {
+      projectName: "Attendance",
+      task: "Punch In",
+      subtasks: [
+        {
+          name: `Punched in at ${new Date().toLocaleTimeString()}`,
+          status: "completed"
+        }
+      ],
+      hours: 0,
+      date: new Date().toISOString().split('T')[0],
+      location: {
+        latitude: 24.9167872,
+        longitude: 74.62912,
+        validation: {
+          isValid: true,
+          matchedLocation: "Current Location",
+          distance: 0,
+          allowedRadius: 100
+        }
+      },
+      type: "punch_in",
+      timestamp: new Date().toISOString()
+    };
+
+    console.log("🌐 Testing actual timesheet format:", timesheetData);
+    
+    try {
+      const response = await fetch(testUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2ODZiOTY5ZmE5YTA5ZWM2YWE1MjM3MmIiLCJlbWFpbCI6Im1lZW5ha3NoaUB0ZXF1aXR5LnRlY2giLCJyb2xlIjoiRW1wbG95ZWUiLCJuYW1lIjoiTWVlbmFrc2hpIEd1cmphciIsImlhdCI6MTc1ODA5ODc0NCwiZXhwIjoxNzU4NTMwNzQ0fQ.M5NzKCzJ5Aeeg2n5RolcNIFlOuGHlsUY14H1w5WX1RE",
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "User-Agent": "Timesheet-Proxy-Test/1.0.0",
+          "x-user-role": "Employee"
+        },
+        body: JSON.stringify(timesheetData)
+      });
+
+      const responseText = await response.text();
+      
+      res.json({
+        testUrl: testUrl,
+        status: response.status,
+        statusText: response.statusText,
+        response: responseText,
+        requestBody: timesheetData,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+    } catch (error) {
+      res.json({
+        error: error.message,
+        testUrl: testUrl,
+        requestBody: timesheetData
+      });
+    }
+
+  } catch (error) {
+    console.error("❌ Test error:", error);
+    res.status(500).json({
+      error: error.message
+    });
+  }
+});
+
 // Proxy to your main timesheet API
 const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
 
