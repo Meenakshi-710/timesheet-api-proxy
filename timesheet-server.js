@@ -715,10 +715,11 @@ app.post("/api/v1/timesheet/createTimesheet", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
     
-    if (!token) {
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header"
+        message: "Provide Bearer token in Authorization header or authentication cookies"
       });
     }
 
@@ -772,10 +773,11 @@ app.get("/api/v1/timesheet/getTimesheetType", async (req, res) => {
   try {
     const { token, role } = extractCredentials(req);
     
-    if (!token) {
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header"
+        message: "Provide Bearer token in Authorization header or authentication cookies"
       });
     }
 
@@ -826,10 +828,11 @@ app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
     const { token, userId, role } = extractCredentials(req);
     const employeeId = req.params.id;
     
-    if (!token) {
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header"
+        message: "Provide Bearer token in Authorization header or authentication cookies"
       });
     }
 
@@ -894,11 +897,12 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     console.log("📋 Request body:", req.body);
     console.log("🍪 Cookies:", req.headers.cookie);
     
-    if (!token) {
-      console.log("❌ No token provided");
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
+      console.log("❌ No token or cookies provided");
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header"
+        message: "Provide Bearer token in Authorization header or authentication cookies"
       });
     }
 
@@ -993,11 +997,22 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     console.log("📤 Punch in data:", punchInData);
     
     const headers = {
-      "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
       "Accept": "application/json",
       "User-Agent": "Timesheet-Proxy-Server/1.0.0"
     };
+
+    // Forward cookies directly to target API (cookie-based authentication)
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+      console.log("🍪 Forwarding cookies to target API");
+    }
+
+    // Also try Bearer token as fallback if available
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      console.log("🔑 Also forwarding Bearer token as fallback");
+    }
 
     if (role) {
       headers["x-user-role"] = role;
@@ -1072,11 +1087,12 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
     console.log("📋 Request body:", req.body);
     console.log("🍪 Cookies:", req.headers.cookie);
     
-    if (!token) {
-      console.log("❌ No token provided");
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
+      console.log("❌ No token or cookies provided");
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header"
+        message: "Provide Bearer token in Authorization header or authentication cookies"
       });
     }
 
@@ -1123,11 +1139,22 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
     console.log("📤 Punch out data:", punchOutData);
     
     const headers = {
-      "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
       "Accept": "application/json",
       "User-Agent": "Timesheet-Proxy-Server/1.0.0"
     };
+
+    // Forward cookies directly to target API (cookie-based authentication)
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+      console.log("🍪 Forwarding cookies to target API");
+    }
+
+    // Also try Bearer token as fallback if available
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      console.log("🔑 Also forwarding Bearer token as fallback");
+    }
 
     if (role) {
       headers["x-user-role"] = role;
@@ -1194,10 +1221,11 @@ app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
   try {
     const { token, role } = extractCredentials(req);
     
-    if (!token) {
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header"
+        message: "Provide Bearer token in Authorization header or authentication cookies"
       });
     }
 
@@ -1209,10 +1237,21 @@ app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
     console.log("🔑 Token:", mask(token));
 
     const headers = {
-      "Authorization": `Bearer ${token}`,
       "Accept": req.headers.accept || "application/json",
       "Content-Type": req.headers["content-type"] || "application/json"
     };
+
+    // Forward cookies directly to target API (cookie-based authentication)
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+      console.log("🍪 Forwarding cookies to target API");
+    }
+
+    // Also try Bearer token as fallback if available
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      console.log("🔑 Also forwarding Bearer token as fallback");
+    }
 
     if (role) {
       headers["x-user-role"] = role;
