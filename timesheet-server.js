@@ -606,10 +606,10 @@ const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
 
 // Location validation configuration
 const LOCATION_CONFIG = {
-  // Default location (Updated to user's current location)
-  DEFAULT_LATITUDE: parseFloat(process.env.LATITUDE) || 26.2752094,
-  DEFAULT_LONGITUDE: parseFloat(process.env.LONGITUDE) || 73.0262075,
-  DEFAULT_RADIUS: parseFloat(process.env.RADIUS) || 1000, // in meters - increased to 1000m for more flexibility
+  // Default location (Jodhpur)
+  DEFAULT_LATITUDE: parseFloat(process.env.LATITUDE) || 26.257544,
+  DEFAULT_LONGITUDE: parseFloat(process.env.LONGITUDE) || 73.009617,
+  DEFAULT_RADIUS: parseFloat(process.env.RADIUS) || 100, // in meters
   
   // Mumbai location
   MUMBAI_LATITUDE: parseFloat(process.env.MUMBAI_LATITUDE) || 19.184251792428768,
@@ -1073,33 +1073,6 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
         body: errorText
       });
       
-      // Check if the response is HTML (indicating the API endpoint doesn't exist)
-      if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html')) {
-        console.log("⚠️  Target API returned HTML instead of JSON - endpoint may not exist");
-        console.log("✅ Returning success response as fallback");
-        
-        // Return a success response as fallback
-        return res.status(200).json({
-          success: true,
-          message: "Punch in recorded successfully (fallback mode)",
-          data: {
-            id: `punch_in_${Date.now()}`,
-            userId: punchInUserId,
-            type: "punch_in",
-            timestamp: new Date().toISOString(),
-            location: {
-              latitude: latNum,
-              longitude: lngNum,
-              validation: locationValidation
-            },
-            status: "completed",
-            note: "Recorded in fallback mode - target API endpoint not available"
-          },
-          fallback: true,
-          targetApiStatus: "unavailable"
-        });
-      }
-      
       return res.status(response.status).json({
         error: errorText,
         status: response.status,
@@ -1267,29 +1240,6 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
         headers: Object.fromEntries(response.headers.entries()),
         body: errorText
       });
-      
-      // Check if the response is HTML (indicating the API endpoint doesn't exist)
-      if (errorText.includes('<!DOCTYPE html>') || errorText.includes('<html')) {
-        console.log("⚠️  Target API returned HTML instead of JSON - endpoint may not exist");
-        console.log("✅ Returning success response as fallback");
-        
-        // Return a success response as fallback
-        return res.status(200).json({
-          success: true,
-          message: "Punch out recorded successfully (fallback mode)",
-          data: {
-            id: `punch_out_${Date.now()}`,
-            userId: punchOutUserId,
-            type: "punch_out",
-            timestamp: new Date().toISOString(),
-            location: punchOutData.location,
-            status: "completed",
-            note: "Recorded in fallback mode - target API endpoint not available"
-          },
-          fallback: true,
-          targetApiStatus: "unavailable"
-        });
-      }
       
       return res.status(response.status).json({
         error: errorText,
