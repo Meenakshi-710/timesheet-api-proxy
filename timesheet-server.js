@@ -532,7 +532,7 @@ app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
   }
 });
 
-// Punch In API
+// Punch In API - Creates a timesheet entry for punch in
 app.post("/api/v1/attendance/punchIn", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
@@ -564,6 +564,30 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
 
     console.log("📍 Location:", { latitude, longitude });
 
+    // Validate location coordinates
+    const locationValidation = validateLocation(latitude, longitude);
+    
+    if (!locationValidation.isValid) {
+      console.log("❌ Location validation failed:", locationValidation.message);
+      return res.status(403).json({
+        error: "Location not allowed",
+        message: locationValidation.message,
+        details: {
+          userLocation: { latitude, longitude },
+          closestLocation: locationValidation.closestLocation,
+          distance: locationValidation.distance,
+          allowedRadius: locationValidation.allowedRadius,
+          validationFailed: true
+        }
+      });
+    }
+
+    console.log("✅ Location validation passed:", {
+      matchedLocation: locationValidation.matchedLocation,
+      distance: locationValidation.distance,
+      allowedRadius: locationValidation.allowedRadius
+    });
+
     // Check if API base URL is configured
     if (!TIMESHEET_API_BASE) {
       console.error("❌ TIMESHEET_API_BASE is not configured!");
@@ -572,15 +596,38 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
         message: "TIMESHEET_API_URL environment variable is not set",
         details: {
           hasApiBase: false,
-          targetUrl: "undefined/api/v1/attendance/punchIn"
+          targetUrl: "undefined/api/v1/timesheet/createTimesheet"
         }
       });
     }
 
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
+    // Create a timesheet entry for punch in
+    const currentTime = new Date();
+    const timesheetData = {
+      projectName: "Attendance",
+      task: "Punch In",
+      subtasks: [
+        {
+          name: `Punched in at ${currentTime.toLocaleTimeString()}`,
+          status: "completed"
+        }
+      ],
+      hours: 0, // Will be calculated when punching out
+      date: currentTime.toISOString().split('T')[0], // YYYY-MM-DD format
+      location: {
+        latitude: latitude,
+        longitude: longitude,
+        validation: locationValidation
+      },
+      type: "punch_in",
+      timestamp: currentTime.toISOString()
+    };
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheet`;
     
     console.log("🌐 Target URL:", targetUrl);
     console.log("🔧 TIMESHEET_API_BASE:", TIMESHEET_API_BASE);
+    console.log("📤 Timesheet data:", timesheetData);
     
     const headers = {
       "Authorization": `Bearer ${token}`,
@@ -593,19 +640,18 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
       headers["x-user-role"] = role;
     }
 
-    // Add user ID to headers if available (extract from token or request)
+    // Add user ID to headers if available
     const extractedUserId = req.body?.userId || req.headers['x-user-id'] || userId;
     if (extractedUserId) {
       headers["x-user-id"] = extractedUserId;
     }
 
     console.log("📤 Forwarding request to target API with headers:", headers);
-    console.log("📤 Request body:", { latitude, longitude });
 
     const response = await fetch(targetUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify({ latitude, longitude })
+      body: JSON.stringify(timesheetData)
     });
 
     console.log("📥 Target API response status:", response.status);
@@ -622,28 +668,6 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
         body: errorText
       });
       
-      // If we get 403 Forbidden or 400 Bad Request, provide a mock response for now
-      if (response.status === 403 || response.status === 400) {
-        console.log(`🔄 Providing mock punch in response due to ${response.status} ${response.statusText}`);
-        const mockResponse = {
-          success: true,
-          message: `Punch in recorded successfully (mock response - API returned ${response.status})`,
-          data: {
-            punchIn: new Date().toISOString(),
-            location: {
-              latitude: latitude,
-              longitude: longitude
-            },
-            userId: userId || "unknown",
-            status: "punched_in"
-          },
-          note: `This is a mock response because the target API returned ${response.status} ${response.statusText}. The endpoint exists but the request format may be incorrect.`
-        };
-        
-        return res.json(mockResponse);
-      }
-      
-      // Return more detailed error information for other errors
       return res.status(response.status).json({
         error: errorText,
         status: response.status,
@@ -659,7 +683,23 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
 
     const data = await response.json();
     console.log("✅ Punch in successful");
-    return res.json(data);
+    
+    // Return a punch in specific response
+    return res.json({
+      success: true,
+      message: "Punch in recorded successfully",
+      data: {
+        punchIn: currentTime.toISOString(),
+        location: {
+          latitude: latitude,
+          longitude: longitude,
+          validation: locationValidation
+        },
+        userId: extractedUserId || "unknown",
+        status: "punched_in",
+        timesheetEntry: data
+      }
+    });
 
   } catch (err) {
     console.error("❌ Punch in exception:", err);
@@ -670,7 +710,7 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
   }
 });
 
-// Punch Out API
+// Punch Out API - Creates a timesheet entry for punch out
 app.post("/api/v1/attendance/punchOut", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
@@ -692,16 +732,6 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
 
     // Location data is optional for punch out, but we'll include it if provided
     const { latitude, longitude } = req.body;
-    const requestBody = {};
-
-    // Include location data if provided
-    if (latitude && longitude) {
-      requestBody.latitude = latitude;
-      requestBody.longitude = longitude;
-      console.log("📍 Location:", { latitude, longitude });
-    } else {
-      console.log("📍 No location data provided (optional for punch out)");
-    }
 
     // Check if API base URL is configured
     if (!TIMESHEET_API_BASE) {
@@ -711,15 +741,37 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
         message: "TIMESHEET_API_URL environment variable is not set",
         details: {
           hasApiBase: false,
-          targetUrl: "undefined/api/v1/attendance/punchOut"
+          targetUrl: "undefined/api/v1/timesheet/createTimesheet"
         }
       });
     }
 
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchOut`;
+    // Create a timesheet entry for punch out
+    const currentTime = new Date();
+    const timesheetData = {
+      projectName: "Attendance",
+      task: "Punch Out",
+      subtasks: [
+        {
+          name: `Punched out at ${currentTime.toLocaleTimeString()}`,
+          status: "completed"
+        }
+      ],
+      hours: 0, // This would ideally be calculated based on punch in time
+      date: currentTime.toISOString().split('T')[0], // YYYY-MM-DD format
+      location: latitude && longitude ? {
+        latitude: latitude,
+        longitude: longitude
+      } : null,
+      type: "punch_out",
+      timestamp: currentTime.toISOString()
+    };
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheet`;
     
     console.log("🌐 Target URL:", targetUrl);
     console.log("🔧 TIMESHEET_API_BASE:", TIMESHEET_API_BASE);
+    console.log("📤 Timesheet data:", timesheetData);
     
     const headers = {
       "Authorization": `Bearer ${token}`,
@@ -732,19 +784,18 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
       headers["x-user-role"] = role;
     }
 
-    // Add user ID to headers if available (extract from token or request)
+    // Add user ID to headers if available
     const extractedUserId = req.body?.userId || req.headers['x-user-id'] || userId;
     if (extractedUserId) {
       headers["x-user-id"] = extractedUserId;
     }
 
     console.log("📤 Forwarding request to target API with headers:", headers);
-    console.log("📤 Request body:", requestBody);
 
     const response = await fetch(targetUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(timesheetData)
     });
 
     console.log("📥 Target API response status:", response.status);
@@ -761,35 +812,6 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
         body: errorText
       });
       
-      // If we get 403 Forbidden or 400 Bad Request, provide a mock response for now
-      if (response.status === 403 || response.status === 400) {
-        console.log(`🔄 Providing mock punch out response due to ${response.status} ${response.statusText}`);
-        const mockResponse = {
-          status: 200,
-          data: {
-            employee: {
-              name: "Mock Employee",
-              email: "employee@example.com"
-            },
-            date: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-            punchIn: new Date(Date.now() - 8 * 60 * 60 * 1000).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }), // 8 hours ago
-            punchOut: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-            totalHours: 8,
-            breaks: [
-              {
-                start: new Date(Date.now() - 4 * 60 * 60 * 1000).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-                end: new Date(Date.now() - 3.5 * 60 * 60 * 1000).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-                duration: "30"
-              }
-            ]
-          },
-          message: `Punched out successfully (mock response - API returned ${response.status})`
-        };
-        
-        return res.json(mockResponse);
-      }
-      
-      // Return more detailed error information for other errors
       return res.status(response.status).json({
         error: errorText,
         status: response.status,
@@ -806,14 +828,21 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
     const data = await response.json();
     console.log("✅ Punch out successful");
     
-    // Ensure the response matches the expected format
-    const formattedResponse = {
-      status: response.status,
-      data: data.data || data,
-      message: data.message || "Punched out successfully"
-    };
-    
-    return res.json(formattedResponse);
+    // Return a punch out specific response
+    return res.json({
+      success: true,
+      message: "Punch out recorded successfully",
+      data: {
+        punchOut: currentTime.toISOString(),
+        location: latitude && longitude ? {
+          latitude: latitude,
+          longitude: longitude
+        } : null,
+        userId: extractedUserId || "unknown",
+        status: "punched_out",
+        timesheetEntry: data
+      }
+    });
 
   } catch (err) {
     console.error("❌ Punch out exception:", err);
