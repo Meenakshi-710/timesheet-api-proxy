@@ -519,6 +519,83 @@ app.get("/test-punchin-formats", async (req, res) => {
   }
 });
 
+// Test punch in with current user's token
+app.get("/test-punchin-with-token", async (req, res) => {
+  try {
+    console.log("🧪 Testing punch in with current user token...");
+    
+    if (!TIMESHEET_API_BASE) {
+      return res.json({
+        error: "TIMESHEET_API_BASE not configured"
+      });
+    }
+
+    const { token, userId, role } = extractCredentials(req);
+    
+    if (!token) {
+      return res.json({
+        error: "No authentication token found",
+        message: "Please provide a Bearer token or authentication cookies"
+      });
+    }
+
+    const baseUrl = TIMESHEET_API_BASE;
+    const testUrl = `${baseUrl}/api/v1/attendance/punchIn`;
+    
+    // Test with simple format
+    const testData = {
+      latitude: 26.279936,
+      longitude: 73.0267648,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log("🌐 Testing with URL:", testUrl);
+    console.log("📤 Test data:", testData);
+    console.log("🔑 Token:", mask(token));
+    
+    try {
+      const response = await fetch(testUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "User-Agent": "Timesheet-Proxy-Test/1.0.0",
+          "x-user-role": role || "Employee"
+        },
+        body: JSON.stringify(testData)
+      });
+
+      const responseText = await response.text();
+      
+      res.json({
+        testUrl: testUrl,
+        status: response.status,
+        statusText: response.statusText,
+        response: responseText,
+        requestBody: testData,
+        headers: Object.fromEntries(response.headers.entries()),
+        tokenProvided: !!token,
+        tokenLength: token ? token.length : 0
+      });
+
+    } catch (error) {
+      res.json({
+        error: error.message,
+        testUrl: testUrl,
+        requestBody: testData,
+        tokenProvided: !!token
+      });
+    }
+
+  } catch (error) {
+    console.error("❌ Test error:", error);
+    res.status(500).json({
+      error: error.message
+    });
+  }
+});
+
 // Test the actual timesheet creation format that's being sent
 app.get("/test-actual-timesheet-format", async (req, res) => {
   try {
@@ -971,8 +1048,8 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
       });
     }
 
-    // Use the timesheet creation endpoint for punch in
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheet`;
+    // Try the direct attendance endpoint first, then fallback to timesheet creation
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
     
     // Extract user ID from JWT token
     let punchInUserId = null;
@@ -986,29 +1063,10 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
       }
     }
 
-    // Create timesheet entry for punch in
+    // Create simple punch in data for attendance API
     const punchInData = {
-      projectName: "Attendance",
-      task: "Punch In",
-      subtasks: [
-        {
-          name: `Punched in at ${new Date().toLocaleTimeString()}`,
-          status: "completed"
-        }
-      ],
-      hours: 0,
-      date: new Date().toISOString().split('T')[0],
-      location: {
-        latitude: latNum,
-        longitude: lngNum,
-        validation: {
-          isValid: true,
-          matchedLocation: locationValidation.matchedLocation,
-          distance: locationValidation.distance,
-          allowedRadius: locationValidation.allowedRadius
-        }
-      },
-      type: "punch_in",
+      latitude: latNum,
+      longitude: lngNum,
       timestamp: new Date().toISOString()
     };
 
@@ -1064,26 +1122,84 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("❌ Punch in error:", response.status, errorText);
-      console.error("❌ Full error details:", {
-        status: response.status,
-        statusText: response.statusText,
-        url: targetUrl,
-        headers: Object.fromEntries(response.headers.entries()),
-        body: errorText
-      });
+      console.error("❌ Direct attendance API failed:", response.status, errorText);
       
-      return res.status(response.status).json({
-        error: errorText,
-        status: response.status,
-        details: {
-          targetUrl: targetUrl,
-          apiBase: TIMESHEET_API_BASE,
-          hasApiBase: !!TIMESHEET_API_BASE,
-          tokenProvided: !!token,
-          tokenLength: token ? token.length : 0
+      // Try fallback to timesheet creation endpoint
+      console.log("🔄 Trying fallback to timesheet creation endpoint...");
+      const fallbackUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheet`;
+      
+      // Create timesheet entry for punch in (fallback format)
+      const fallbackData = {
+        projectName: "Attendance",
+        task: "Punch In",
+        subtasks: [
+          {
+            name: `Punched in at ${new Date().toLocaleTimeString()}`,
+            status: "completed"
+          }
+        ],
+        hours: 0,
+        date: new Date().toISOString().split('T')[0],
+        location: {
+          latitude: latNum,
+          longitude: lngNum,
+          validation: {
+            isValid: true,
+            matchedLocation: locationValidation.matchedLocation,
+            distance: locationValidation.distance,
+            allowedRadius: locationValidation.allowedRadius
+          }
+        },
+        type: "punch_in",
+        timestamp: new Date().toISOString()
+      };
+
+      // Add user ID if available from token
+      if (punchInUserId) {
+        fallbackData.userId = punchInUserId;
+      }
+      
+      console.log("🌐 Fallback URL:", fallbackUrl);
+      console.log("📤 Fallback data:", fallbackData);
+      
+      try {
+        const fallbackResponse = await fetch(fallbackUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(fallbackData)
+        });
+
+        console.log("📥 Fallback response status:", fallbackResponse.status);
+
+        if (!fallbackResponse.ok) {
+          const fallbackErrorText = await fallbackResponse.text();
+          console.error("❌ Fallback also failed:", fallbackResponse.status, fallbackErrorText);
+          
+          return res.status(fallbackResponse.status).json({
+            error: fallbackErrorText,
+            status: fallbackResponse.status,
+            details: {
+              targetUrl: fallbackUrl,
+              apiBase: TIMESHEET_API_BASE,
+              hasApiBase: !!TIMESHEET_API_BASE,
+              tokenProvided: !!token,
+              tokenLength: token ? token.length : 0,
+              triedFallback: true
+            }
+          });
         }
-      });
+
+        const fallbackData = await fallbackResponse.json();
+        console.log("✅ Fallback punch in successful:", fallbackData);
+        return res.status(fallbackResponse.status).json(fallbackData);
+        
+      } catch (fallbackErr) {
+        console.error("❌ Fallback exception:", fallbackErr);
+        return res.status(500).json({
+          error: String(fallbackErr),
+          message: "Both direct attendance and timesheet creation endpoints failed"
+        });
+      }
     }
 
     const data = await response.json();
