@@ -400,7 +400,7 @@ const LOCATION_CONFIG = {
   // Default location (Jodhpur)
   DEFAULT_LATITUDE: parseFloat(process.env.LATITUDE) || 26.257544,
   DEFAULT_LONGITUDE: parseFloat(process.env.LONGITUDE) || 73.009617,
-  DEFAULT_RADIUS: parseFloat(process.env.RADIUS) || 1500, // in meters
+  DEFAULT_RADIUS: parseFloat(process.env.RADIUS) || 100, // in meters
   
   // Mumbai location
   MUMBAI_LATITUDE: parseFloat(process.env.MUMBAI_LATITUDE) || 19.184251792428768,
