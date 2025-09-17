@@ -30,7 +30,30 @@ const mask = (s = "") => {
 
 // Extract credentials from request
 function extractCredentials(req) {
-  const token = req.headers.authorization?.replace('Bearer ', '') || req.body?.token;
+  // Try Bearer token first
+  let token = req.headers.authorization?.replace('Bearer ', '') || req.body?.token;
+  
+  // If no Bearer token, try to extract from cookies
+  if (!token && req.headers.cookie) {
+    const cookies = req.headers.cookie.split(';').reduce((acc, cookie) => {
+      const [key, value] = cookie.trim().split('=');
+      acc[key] = value;
+      return acc;
+    }, {});
+    
+    // Try to find user data in cookies
+    const userCookie = cookies.currentUser || cookies.user || cookies.authUser;
+    if (userCookie) {
+      try {
+        const userData = JSON.parse(decodeURIComponent(userCookie));
+        token = userData.accessToken || userData.data?.accessToken || userData.token || userData.data?.token;
+        console.log("🍪 Extracted token from cookie:", token ? mask(token) : "No token found");
+      } catch (error) {
+        console.error("❌ Error parsing user cookie:", error);
+      }
+    }
+  }
+  
   const userId = req.params?.id || req.body?.userId || req.headers['x-user-id'];
   const role = req.headers['x-user-role'] || req.body?.role;
   
@@ -51,6 +74,32 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
     version: "1.0.0"
   });
+});
+
+// Authentication test endpoint
+app.get("/api/v1/auth/test", (req, res) => {
+  try {
+    const { token, userId, role } = extractCredentials(req);
+    
+    res.json({
+      status: "ok",
+      message: "Authentication test endpoint",
+      timestamp: new Date().toISOString(),
+      auth: {
+        hasToken: !!token,
+        tokenMasked: token ? mask(token) : null,
+        userId: userId || null,
+        role: role || null,
+        hasCookies: !!req.headers.cookie,
+        cookies: req.headers.cookie ? req.headers.cookie.split(';').map(c => c.trim().split('=')[0]) : []
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "Authentication test failed",
+      message: String(error)
+    });
+  }
 });
 
 // Office configuration endpoint
@@ -722,6 +771,7 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     console.log("👤 Role:", role);
     console.log("📋 Request headers:", req.headers);
     console.log("📋 Request body:", req.body);
+    console.log("🍪 Cookies:", req.headers.cookie);
     
     if (!token) {
       console.log("❌ No token provided");
@@ -900,6 +950,7 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
     console.log("👤 Role:", role);
     console.log("📋 Request headers:", req.headers);
     console.log("📋 Request body:", req.body);
+    console.log("🍪 Cookies:", req.headers.cookie);
     
     if (!token) {
       console.log("❌ No token provided");
