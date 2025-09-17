@@ -607,9 +607,9 @@ const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
 // Location validation configuration
 const LOCATION_CONFIG = {
   // Default location (Updated to user's current location)
-  DEFAULT_LATITUDE: parseFloat(process.env.LATITUDE) || 26.279995,
-  DEFAULT_LONGITUDE: parseFloat(process.env.LONGITUDE) || 73.026801,
-  DEFAULT_RADIUS: parseFloat(process.env.RADIUS) || 500, // in meters - increased to 500m
+  DEFAULT_LATITUDE: parseFloat(process.env.LATITUDE) || 26.2752094,
+  DEFAULT_LONGITUDE: parseFloat(process.env.LONGITUDE) || 73.0262075,
+  DEFAULT_RADIUS: parseFloat(process.env.RADIUS) || 1000, // in meters - increased to 1000m for more flexibility
   
   // Mumbai location
   MUMBAI_LATITUDE: parseFloat(process.env.MUMBAI_LATITUDE) || 19.184251792428768,
