@@ -19,7 +19,20 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+// Body parsing middleware with error handling
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Debug middleware for body parsing
+app.use((req, res, next) => {
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+    console.log("📋 Body parsing debug:");
+    console.log("📋 Content-Type:", req.headers['content-type']);
+    console.log("📋 Body keys:", req.body ? Object.keys(req.body) : 'No body');
+    console.log("📋 Body:", req.body);
+  }
+  next();
+});
 
 // Utility: mask tokens in logs
 const mask = (s = "") => {
@@ -63,6 +76,10 @@ function extractCredentials(req) {
 // Simple request logger
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log("📋 Request headers:", req.headers);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log("📋 Request body:", req.body);
+  }
   next();
 });
 
@@ -97,6 +114,28 @@ app.get("/api/v1/auth/test", (req, res) => {
   } catch (error) {
     res.status(500).json({
       error: "Authentication test failed",
+      message: String(error)
+    });
+  }
+});
+
+// Simple test endpoint for POST requests
+app.post("/api/v1/test", (req, res) => {
+  try {
+    res.json({
+      status: "ok",
+      message: "Test POST endpoint working",
+      timestamp: new Date().toISOString(),
+      received: {
+        body: req.body,
+        headers: req.headers,
+        method: req.method,
+        url: req.url
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "Test endpoint failed",
       message: String(error)
     });
   }
@@ -783,11 +822,27 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
 
     const { latitude, longitude } = req.body;
 
+    console.log("📍 Location data received:", { latitude, longitude });
+
     if (!latitude || !longitude) {
       console.log("❌ Missing location data");
       return res.status(400).json({
         error: "Location required",
-        message: "Both latitude and longitude are required"
+        message: "Both latitude and longitude are required",
+        received: { latitude, longitude }
+      });
+    }
+
+    // Validate that latitude and longitude are numbers
+    const latNum = parseFloat(latitude);
+    const lngNum = parseFloat(longitude);
+    
+    if (isNaN(latNum) || isNaN(lngNum)) {
+      console.log("❌ Invalid location data - not numbers");
+      return res.status(400).json({
+        error: "Invalid location data",
+        message: "Latitude and longitude must be valid numbers",
+        received: { latitude, longitude }
       });
     }
 
@@ -1142,9 +1197,25 @@ app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
 // Error handler
 app.use((err, req, res, next) => {
   console.error("🚨 Unhandled error:", err);
+  console.error("🚨 Error stack:", err.stack);
+  console.error("🚨 Request details:", {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    body: req.body
+  });
   res.status(500).json({
     error: "Internal server error",
     message: String(err)
+  });
+});
+
+// Catch-all handler for unmatched routes
+app.use((req, res) => {
+  console.error("🚨 Route not found:", req.method, req.url);
+  res.status(404).json({
+    error: "Route not found",
+    message: `${req.method} ${req.url} not found`
   });
 });
 
