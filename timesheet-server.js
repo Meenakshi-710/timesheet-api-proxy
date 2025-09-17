@@ -970,11 +970,28 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     // Use the correct punch in endpoint format
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
     
+    // Extract user ID from JWT token
+    let punchInUserId = null;
+    if (token) {
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        punchInUserId = payload._id || payload.id || payload.userId;
+        console.log("🔍 Extracted user ID from token:", punchInUserId);
+      } catch (err) {
+        console.error("❌ Failed to decode JWT token:", err);
+      }
+    }
+
     // The target API expects simple latitude/longitude format
     const punchInData = {
       latitude: latNum,
       longitude: lngNum
     };
+
+    // Add user ID if available
+    if (punchInUserId) {
+      punchInData.employee = punchInUserId;
+    }
     
     console.log("🌐 Target URL:", targetUrl);
     console.log("🔧 TIMESHEET_API_BASE:", TIMESHEET_API_BASE);
@@ -1087,11 +1104,28 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
     // Use the correct punch out endpoint format
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchOut`;
     
+    // Extract user ID from JWT token
+    let punchOutUserId = null;
+    if (token) {
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        punchOutUserId = payload._id || payload.id || payload.userId;
+        console.log("🔍 Extracted user ID from token:", punchOutUserId);
+      } catch (err) {
+        console.error("❌ Failed to decode JWT token:", err);
+      }
+    }
+
     // The target API expects simple latitude/longitude format (optional for punch out)
     const punchOutData = {};
     if (latitude && longitude) {
       punchOutData.latitude = parseFloat(latitude);
       punchOutData.longitude = parseFloat(longitude);
+    }
+
+    // Add user ID if available
+    if (punchOutUserId) {
+      punchOutData.employee = punchOutUserId;
     }
     
     console.log("🌐 Target URL:", targetUrl);
