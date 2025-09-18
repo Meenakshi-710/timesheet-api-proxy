@@ -580,6 +580,229 @@ app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
   }
 });
 
+// Punch In endpoint
+app.post("/api/v1/attendance/punchIn", async (req, res) => {
+  try {
+    const { token, userId, role } = extractCredentials(req);
+    
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message: "Provide Bearer token in Authorization header or authentication cookies"
+      });
+    }
+
+    const { latitude, longitude } = req.body;
+    
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        error: "Location required",
+        message: "Provide latitude and longitude in request body"
+      });
+    }
+
+    // Validate location
+    const locationValidation = validateLocation(latitude, longitude);
+    if (!locationValidation.isValid) {
+      return res.status(400).json({
+        error: "Location not allowed",
+        message: locationValidation.message,
+        validation: locationValidation
+      });
+    }
+
+    console.log("⏰ Processing punch in");
+    console.log("🔑 Token:", mask(token));
+    console.log("📍 Location:", { latitude, longitude });
+    console.log("✅ Location validated:", locationValidation.matchedLocation);
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
+    
+    const headers = {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    };
+
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    // Forward cookies if available
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ latitude, longitude })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Punch in error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    console.log("✅ Punch in successful");
+    return res.json(data);
+
+  } catch (err) {
+    console.error("❌ Punch in exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to punch in"
+    });
+  }
+});
+
+// Punch Out endpoint
+app.post("/api/v1/attendance/punchOut", async (req, res) => {
+  try {
+    const { token, userId, role } = extractCredentials(req);
+    
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message: "Provide Bearer token in Authorization header or authentication cookies"
+      });
+    }
+
+    const { latitude, longitude } = req.body;
+    
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        error: "Location required",
+        message: "Provide latitude and longitude in request body"
+      });
+    }
+
+    // Validate location
+    const locationValidation = validateLocation(latitude, longitude);
+    if (!locationValidation.isValid) {
+      return res.status(400).json({
+        error: "Location not allowed",
+        message: locationValidation.message,
+        validation: locationValidation
+      });
+    }
+
+    console.log("⏰ Processing punch out");
+    console.log("🔑 Token:", mask(token));
+    console.log("📍 Location:", { latitude, longitude });
+    console.log("✅ Location validated:", locationValidation.matchedLocation);
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchOut`;
+    
+    const headers = {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    };
+
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    // Forward cookies if available
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ latitude, longitude })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Punch out error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    console.log("✅ Punch out successful");
+    return res.json(data);
+
+  } catch (err) {
+    console.error("❌ Punch out exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to punch out"
+    });
+  }
+});
+
+// Get today's attendance status
+app.get("/api/v1/attendance/todayAttendance", async (req, res) => {
+  try {
+    const { token, userId, role } = extractCredentials(req);
+    
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message: "Provide Bearer token in Authorization header or authentication cookies"
+      });
+    }
+
+    console.log("📊 Fetching today's attendance");
+    console.log("🔑 Token:", mask(token));
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/todayAttendance`;
+    
+    const headers = {
+      "Authorization": `Bearer ${token}`,
+      "Accept": "application/json"
+    };
+
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    // Forward cookies if available
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "GET",
+      headers
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Get today's attendance error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    console.log("✅ Today's attendance fetched successfully");
+    return res.json(data);
+
+  } catch (err) {
+    console.error("❌ Get today's attendance exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to fetch today's attendance"
+    });
+  }
+});
+
 
 
 // Generic proxy for other timesheet endpoints
