@@ -160,12 +160,16 @@ app.get("/api/v1/office-config", (req, res) => {
           name: "Mumbai Office",
           configured: true
         },
-        currentLocation: {
-          latitude: LOCATION_CONFIG.CURRENT_LATITUDE,
-          longitude: LOCATION_CONFIG.CURRENT_LONGITUDE,
-          radius: LOCATION_CONFIG.CURRENT_RADIUS,
-          name: "Current Location",
-          configured: true
+        additionalOffice: {
+          latitude: LOCATION_CONFIG.ADDITIONAL_LATITUDE,
+          longitude: LOCATION_CONFIG.ADDITIONAL_LONGITUDE,
+          radius: LOCATION_CONFIG.ADDITIONAL_RADIUS,
+          name: "Additional Office",
+          configured: !!LOCATION_CONFIG.ADDITIONAL_LATITUDE
+        },
+        settings: {
+          allowDynamicLocation: LOCATION_CONFIG.ALLOW_DYNAMIC_LOCATION,
+          maxDistanceFromOffice: LOCATION_CONFIG.MAX_DISTANCE_FROM_OFFICE
         }
       }
     };
@@ -302,20 +306,24 @@ const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
 
 // Location validation configuration
 const LOCATION_CONFIG = {
-  // Default location (Jodhpur)
-  DEFAULT_LATITUDE: parseFloat(process.env.LATITUDE) || 26.257544,
-  DEFAULT_LONGITUDE: parseFloat(process.env.LONGITUDE) || 73.009617,
-  DEFAULT_RADIUS: parseFloat(process.env.RADIUS) || 100, // in meters
+  // Default office location (Jodhpur)
+  DEFAULT_LATITUDE: parseFloat(process.env.DEFAULT_LATITUDE) || 26.257544,
+  DEFAULT_LONGITUDE: parseFloat(process.env.DEFAULT_LONGITUDE) || 73.009617,
+  DEFAULT_RADIUS: parseFloat(process.env.DEFAULT_RADIUS) || 100, // in meters
   
-  // Mumbai location
+  // Mumbai office location
   MUMBAI_LATITUDE: parseFloat(process.env.MUMBAI_LATITUDE) || 19.184251792428768,
   MUMBAI_LONGITUDE: parseFloat(process.env.MUMBAI_LONGITUDE) || 72.8313642,
   MUMBAI_RADIUS: parseFloat(process.env.MUMBAI_RADIUS) || 100, // in meters
   
-  // Current location (where you are now)
-  CURRENT_LATITUDE: parseFloat(process.env.CURRENT_LATITUDE) || 24.9167872,
-  CURRENT_LONGITUDE: parseFloat(process.env.CURRENT_LONGITUDE) || 74.62912,
-  CURRENT_RADIUS: parseFloat(process.env.CURRENT_RADIUS) || 100 // in meters
+  // Additional office location (if needed)
+  ADDITIONAL_LATITUDE: parseFloat(process.env.ADDITIONAL_LATITUDE) || null,
+  ADDITIONAL_LONGITUDE: parseFloat(process.env.ADDITIONAL_LONGITUDE) || null,
+  ADDITIONAL_RADIUS: parseFloat(process.env.ADDITIONAL_RADIUS) || 100, // in meters
+  
+  // Allow dynamic location detection
+  ALLOW_DYNAMIC_LOCATION: process.env.ALLOW_DYNAMIC_LOCATION === 'true' || false,
+  MAX_DISTANCE_FROM_OFFICE: parseFloat(process.env.MAX_DISTANCE_FROM_OFFICE) || 5000 // 5km max distance
 };
 
 // Validate API base URL
@@ -352,14 +360,18 @@ function validateLocation(userLatitude, userLongitude) {
       latitude: LOCATION_CONFIG.MUMBAI_LATITUDE,
       longitude: LOCATION_CONFIG.MUMBAI_LONGITUDE,
       radius: LOCATION_CONFIG.MUMBAI_RADIUS
-    },
-    {
-      name: "Current Location",
-      latitude: LOCATION_CONFIG.CURRENT_LATITUDE,
-      longitude: LOCATION_CONFIG.CURRENT_LONGITUDE,
-      radius: LOCATION_CONFIG.CURRENT_RADIUS
     }
   ];
+
+  // Add additional office location if configured
+  if (LOCATION_CONFIG.ADDITIONAL_LATITUDE && LOCATION_CONFIG.ADDITIONAL_LONGITUDE) {
+    locations.push({
+      name: "Additional Office",
+      latitude: LOCATION_CONFIG.ADDITIONAL_LATITUDE,
+      longitude: LOCATION_CONFIG.ADDITIONAL_LONGITUDE,
+      radius: LOCATION_CONFIG.ADDITIONAL_RADIUS
+    });
+  }
 
   for (const location of locations) {
     const distance = calculateDistance(
