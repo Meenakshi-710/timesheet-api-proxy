@@ -903,6 +903,100 @@ app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
   }
 });
 
+// Proxy: Get All Employees (for HR)
+app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
+  try {
+    const { token, role } = extractCredentials(req);
+
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message: "Provide Bearer token in Authorization header or authentication cookies"
+      });
+    }
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/admin/getAllEmployees`;
+
+    const headers = {
+      "Authorization": `Bearer ${token}`,
+      "Accept": "application/json"
+    };
+    if (role) headers["x-user-role"] = role;
+    if (req.headers.cookie) headers["Cookie"] = req.headers.cookie;
+
+    const response = await fetch(targetUrl, {
+      method: "GET",
+      headers
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    return res.json(data);
+
+  } catch (err) {
+    console.error("❌ Get all employees exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to fetch employees"
+    });
+  }
+});
+
+// Proxy: Create Timesheet Type
+app.post("/api/v1/timesheet/createTimesheetType", async (req, res) => {
+  try {
+    const { token, role } = extractCredentials(req);
+
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message: "Provide Bearer token in Authorization header or authentication cookies"
+      });
+    }
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheetType`;
+
+    const headers = {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    };
+    if (role) headers["x-user-role"] = role;
+    if (req.headers.cookie) headers["Cookie"] = req.headers.cookie;
+
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(req.body)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    return res.json(data);
+
+  } catch (err) {
+    console.error("❌ Create timesheet type exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to create timesheet type"
+    });
+  }
+});
+
 // Error handler
 app.use((err, req, res, next) => {
   console.error("🚨 Unhandled error:", err);
