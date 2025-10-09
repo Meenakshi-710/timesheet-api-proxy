@@ -548,6 +548,66 @@ app.get("/api/v1/timesheet/getTimesheetType", async (req, res) => {
   }
 });
 
+// Get All Employees
+app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
+  try {
+    const { token, role } = extractCredentials(req);
+    
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message: "Provide Bearer token in Authorization header or authentication cookies"
+      });
+    }
+
+    console.log("👥 Fetching all employees");
+    console.log("🔑 Token:", mask(token));
+    console.log("👤 Role:", role);
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/admin/getAllEmployees`;
+    
+    const headers = {
+      "Authorization": `Bearer ${token}`,
+      "Accept": "application/json"
+    };
+
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    // Forward cookies if available
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "GET",
+      headers
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Get all employees error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    console.log("✅ All employees fetched successfully");
+    return res.json(data);
+
+  } catch (err) {
+    console.error("❌ Get all employees exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to fetch all employees"
+    });
+  }
+});
+
 // Get All Timesheets of Employee
 app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
   try {
