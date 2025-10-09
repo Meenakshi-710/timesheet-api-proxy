@@ -301,8 +301,9 @@ app.get("/test-target-api", async (req, res) => {
 
 
 
+
 // Proxy to your main timesheet API
-const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "https://timesheet-api-proxy-7d5b.onrender.com";
+const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
 
 // Location validation configuration
 const LOCATION_CONFIG = {
@@ -833,7 +834,7 @@ app.get("/api/v1/attendance/todayAttendance", async (req, res) => {
 });
 
 // Get All Employees
-app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
+app.get("/api/v1/employee/getAllEmployees", async (req, res) => {
   try {
     const { token, role } = extractCredentials(req);
 
@@ -890,6 +891,7 @@ app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
     });
   }
 });
+
 
 
 // Generic proxy for other timesheet endpoints
