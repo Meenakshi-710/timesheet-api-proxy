@@ -988,7 +988,7 @@ app.use((req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Timesheet API server running on http://localhost:${PORT}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
   console.log(`🌐 Proxying to: ${TIMESHEET_API_BASE}`);
