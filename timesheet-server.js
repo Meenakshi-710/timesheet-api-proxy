@@ -19,6 +19,7 @@ app.use(
     credentials: true,
   })
 );
+
 // Body parsing middleware with error handling
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -82,6 +83,141 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Proxy to your main timesheet API
+const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
+
+// Location validation configuration
+const LOCATION_CONFIG = {
+  // Default radius for location validation (in meters)
+  DEFAULT_RADIUS: parseFloat(process.env.DEFAULT_RADIUS) || 100,
+  
+  // Allow dynamic location detection
+  ALLOW_DYNAMIC_LOCATION: process.env.ALLOW_DYNAMIC_LOCATION === 'true' || true,
+  MAX_DISTANCE_FROM_OFFICE: parseFloat(process.env.MAX_DISTANCE_FROM_OFFICE) || 5000
+};
+
+// Validate API base URL
+if (!TIMESHEET_API_BASE) {
+  console.warn("⚠️  WARNING: TIMESHEET_API_URL environment variable is not set!");
+  console.warn("⚠️  Set it with: TIMESHEET_API_URL=https://your-api-url.com node timesheet-server.js");
+}
+
+// Utility function to calculate distance between two coordinates using Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Earth's radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const distance = R * c;
+  return distance;
+}
+
+// Function to validate if the provided coordinates are within allowed locations
+function validateLocation(userLatitude, userLongitude) {
+  // If dynamic location is enabled, always allow the location
+  if (LOCATION_CONFIG.ALLOW_DYNAMIC_LOCATION) {
+    return {
+      isValid: true,
+      matchedLocation: "Dynamic Location",
+      distance: 0,
+      allowedRadius: LOCATION_CONFIG.DEFAULT_RADIUS,
+      message: "Location validated using dynamic detection"
+    };
+  }
+
+  // If dynamic location is disabled, check against configured office locations
+  const locations = [];
+  
+  if (process.env.DEFAULT_LATITUDE && process.env.DEFAULT_LONGITUDE) {
+    locations.push({
+      name: "Default Office",
+      latitude: parseFloat(process.env.DEFAULT_LATITUDE),
+      longitude: parseFloat(process.env.DEFAULT_LONGITUDE),
+      radius: LOCATION_CONFIG.DEFAULT_RADIUS
+    });
+  }
+
+  if (process.env.MUMBAI_LATITUDE && process.env.MUMBAI_LONGITUDE) {
+    locations.push({
+      name: "Mumbai Office",
+      latitude: parseFloat(process.env.MUMBAI_LATITUDE),
+      longitude: parseFloat(process.env.MUMBAI_LONGITUDE),
+      radius: parseFloat(process.env.MUMBAI_RADIUS) || LOCATION_CONFIG.DEFAULT_RADIUS
+    });
+  }
+
+  if (process.env.ADDITIONAL_LATITUDE && process.env.ADDITIONAL_LONGITUDE) {
+    locations.push({
+      name: "Additional Office",
+      latitude: parseFloat(process.env.ADDITIONAL_LATITUDE),
+      longitude: parseFloat(process.env.ADDITIONAL_LONGITUDE),
+      radius: parseFloat(process.env.ADDITIONAL_RADIUS) || LOCATION_CONFIG.DEFAULT_RADIUS
+    });
+  }
+
+  // If no locations are configured, allow the location
+  if (locations.length === 0) {
+    return {
+      isValid: true,
+      matchedLocation: "No Office Locations Configured",
+      distance: 0,
+      allowedRadius: LOCATION_CONFIG.DEFAULT_RADIUS,
+      message: "No office locations configured, allowing location"
+    };
+  }
+
+  // Check against configured locations
+  for (const location of locations) {
+    const distance = calculateDistance(
+      userLatitude, 
+      userLongitude, 
+      location.latitude, 
+      location.longitude
+    );
+    
+    if (distance <= location.radius) {
+      return {
+        isValid: true,
+        matchedLocation: location.name,
+        distance: Math.round(distance),
+        allowedRadius: location.radius
+      };
+    }
+  }
+
+  // Find the closest location for error reporting
+  let closestLocation = null;
+  let minDistance = Infinity;
+  
+  for (const location of locations) {
+    const distance = calculateDistance(
+      userLatitude, 
+      userLongitude, 
+      location.latitude, 
+      location.longitude
+    );
+    
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestLocation = location;
+    }
+  }
+
+  return {
+    isValid: false,
+    closestLocation: closestLocation?.name || "Unknown",
+    distance: Math.round(minDistance),
+    allowedRadius: closestLocation?.radius || LOCATION_CONFIG.DEFAULT_RADIUS,
+    message: `You are ${Math.round(minDistance)}m away from the nearest allowed location (${closestLocation?.name}). Maximum allowed distance is ${closestLocation?.radius}m.`
+  };
+}
+
+// ==================== HEALTH & TEST ENDPOINTS ====================
 
 // Health check
 app.get("/health", (req, res) => {
@@ -252,7 +388,6 @@ app.get("/test-target-api", async (req, res) => {
       console.log(`🌐 Testing: ${testUrl}`);
 
       try {
-        // Test with GET request
         const getResponse = await fetch(testUrl, {
           method: "GET",
           headers: {
@@ -299,149 +434,77 @@ app.get("/test-target-api", async (req, res) => {
   }
 });
 
+// ==================== ADMIN ENDPOINTS ====================
 
-
-// Proxy to your main timesheet API
-// Always use the Render server URL as the base for all proxied requests
-const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "https://timesheet-api-proxy-7d5b.onrender.com";
-
-// Location validation configuration
-const LOCATION_CONFIG = {
-  // Default radius for location validation (in meters)
-  DEFAULT_RADIUS: parseFloat(process.env.DEFAULT_RADIUS) || 100,
-  
-  // Allow dynamic location detection
-  ALLOW_DYNAMIC_LOCATION: process.env.ALLOW_DYNAMIC_LOCATION === 'true' || true, // Default to true
-  MAX_DISTANCE_FROM_OFFICE: parseFloat(process.env.MAX_DISTANCE_FROM_OFFICE) || 5000 // 5km max distance
-};
-
-// Validate API base URL
-if (!TIMESHEET_API_BASE) {
-  console.warn("⚠️  WARNING: TIMESHEET_API_URL environment variable is not set!");
-  console.warn("⚠️  Set it with: TIMESHEET_API_URL=https://your-api-url.com node timesheet-server.js");
-}
-
-// Utility function to calculate distance between two coordinates using Haversine formula
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000; // Earth's radius in meters
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  const distance = R * c; // Distance in meters
-  return distance;
-}
-
-// Function to validate if the provided coordinates are within allowed locations
-function validateLocation(userLatitude, userLongitude) {
-  // If dynamic location is enabled, always allow the location
-  if (LOCATION_CONFIG.ALLOW_DYNAMIC_LOCATION) {
-    return {
-      isValid: true,
-      matchedLocation: "Dynamic Location",
-      distance: 0,
-      allowedRadius: LOCATION_CONFIG.DEFAULT_RADIUS,
-      message: "Location validated using dynamic detection"
-    };
-  }
-
-  // If dynamic location is disabled, check against configured office locations
-  const locations = [];
-  
-  // Check for environment variables for office locations
-  if (process.env.DEFAULT_LATITUDE && process.env.DEFAULT_LONGITUDE) {
-    locations.push({
-      name: "Default Office",
-      latitude: parseFloat(process.env.DEFAULT_LATITUDE),
-      longitude: parseFloat(process.env.DEFAULT_LONGITUDE),
-      radius: LOCATION_CONFIG.DEFAULT_RADIUS
-    });
-  }
-
-  if (process.env.MUMBAI_LATITUDE && process.env.MUMBAI_LONGITUDE) {
-    locations.push({
-      name: "Mumbai Office",
-      latitude: parseFloat(process.env.MUMBAI_LATITUDE),
-      longitude: parseFloat(process.env.MUMBAI_LONGITUDE),
-      radius: parseFloat(process.env.MUMBAI_RADIUS) || LOCATION_CONFIG.DEFAULT_RADIUS
-    });
-  }
-
-  if (process.env.ADDITIONAL_LATITUDE && process.env.ADDITIONAL_LONGITUDE) {
-    locations.push({
-      name: "Additional Office",
-      latitude: parseFloat(process.env.ADDITIONAL_LATITUDE),
-      longitude: parseFloat(process.env.ADDITIONAL_LONGITUDE),
-      radius: parseFloat(process.env.ADDITIONAL_RADIUS) || LOCATION_CONFIG.DEFAULT_RADIUS
-    });
-  }
-
-  // If no locations are configured, allow the location
-  if (locations.length === 0) {
-    return {
-      isValid: true,
-      matchedLocation: "No Office Locations Configured",
-      distance: 0,
-      allowedRadius: LOCATION_CONFIG.DEFAULT_RADIUS,
-      message: "No office locations configured, allowing location"
-    };
-  }
-
-  // Check against configured locations
-  for (const location of locations) {
-    const distance = calculateDistance(
-      userLatitude, 
-      userLongitude, 
-      location.latitude, 
-      location.longitude
-    );
+// Get All Employees
+app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
+  try {
+    const { token, role } = extractCredentials(req);
     
-    if (distance <= location.radius) {
-      return {
-        isValid: true,
-        matchedLocation: location.name,
-        distance: Math.round(distance),
-        allowedRadius: location.radius
-      };
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message: "Provide Bearer token in Authorization header or authentication cookies"
+      });
     }
-  }
 
-  // Find the closest location for error reporting
-  let closestLocation = null;
-  let minDistance = Infinity;
-  
-  for (const location of locations) {
-    const distance = calculateDistance(
-      userLatitude, 
-      userLongitude, 
-      location.latitude, 
-      location.longitude
-    );
+    console.log("👥 Fetching all employees");
+    console.log("🔑 Token:", mask(token));
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/admin/getAllEmployees`;
     
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestLocation = location;
-    }
-  }
+    const headers = {
+      "Accept": "application/json"
+    };
 
-  return {
-    isValid: false,
-    closestLocation: closestLocation?.name || "Unknown",
-    distance: Math.round(minDistance),
-    allowedRadius: closestLocation?.radius || LOCATION_CONFIG.DEFAULT_RADIUS,
-    message: `You are ${Math.round(minDistance)}m away from the nearest allowed location (${closestLocation?.name}). Maximum allowed distance is ${closestLocation?.radius}m.`
-  };
-}
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+      console.log("🍪 Forwarding cookies to target API");
+    }
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      console.log("🔑 Also forwarding Bearer token as fallback");
+    }
+
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "GET",
+      headers
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Get employees error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    console.log("✅ Employees fetched successfully");
+    return res.json(data);
+
+  } catch (err) {
+    console.error("❌ Get employees exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to fetch employees"
+    });
+  }
+});
+
+// ==================== TIMESHEET ENDPOINTS ====================
 
 // Create Timesheet Entry
 app.post("/api/v1/timesheet/createTimesheet", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
     
-    // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
@@ -457,10 +520,17 @@ app.post("/api/v1/timesheet/createTimesheet", async (req, res) => {
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheet`;
     
     const headers = {
-      "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
       "Accept": "application/json"
     };
+
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
 
     if (role) {
       headers["x-user-role"] = role;
@@ -499,7 +569,6 @@ app.get("/api/v1/timesheet/getTimesheetType", async (req, res) => {
   try {
     const { token, role } = extractCredentials(req);
     
-    // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
@@ -513,9 +582,16 @@ app.get("/api/v1/timesheet/getTimesheetType", async (req, res) => {
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/getTimesheetType`;
     
     const headers = {
-      "Authorization": `Bearer ${token}`,
       "Accept": "application/json"
     };
+
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
 
     if (role) {
       headers["x-user-role"] = role;
@@ -548,13 +624,86 @@ app.get("/api/v1/timesheet/getTimesheetType", async (req, res) => {
   }
 });
 
+// Create Timesheet Type
+app.post("/api/v1/timesheet/createTimesheetType", async (req, res) => {
+  try {
+    const { token, role } = extractCredentials(req);
+    
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message: "Provide Bearer token in Authorization header or authentication cookies"
+      });
+    }
+
+    const { name } = req.body;
+    
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        error: "Validation error",
+        message: "Timesheet type name is required"
+      });
+    }
+
+    console.log("📝 Creating timesheet type");
+    console.log("🔑 Token:", mask(token));
+    console.log("📋 Type name:", name);
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheetType`;
+    
+    const headers = {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    };
+
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+      console.log("🍪 Forwarding cookies to target API");
+    }
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      console.log("🔑 Also forwarding Bearer token as fallback");
+    }
+
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: name.trim() })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Create timesheet type error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    console.log("✅ Timesheet type created successfully");
+    return res.json(data);
+
+  } catch (err) {
+    console.error("❌ Create timesheet type exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to create timesheet type"
+    });
+  }
+});
+
 // Get All Timesheets of Employee
 app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
   try {
-    const { token, userId, role } = extractCredentials(req);
+    const { token, role } = extractCredentials(req);
     const employeeId = req.params.id;
     
-    // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
@@ -575,9 +724,16 @@ app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/getAllTimesheetOfEmployee/${employeeId}`;
     
     const headers = {
-      "Authorization": `Bearer ${token}`,
       "Accept": "application/json"
     };
+
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
 
     if (role) {
       headers["x-user-role"] = role;
@@ -610,12 +766,13 @@ app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
   }
 });
 
+// ==================== ATTENDANCE ENDPOINTS ====================
+
 // Punch In endpoint
 app.post("/api/v1/attendance/punchIn", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
     
-    // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
@@ -650,7 +807,6 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
     
     const headers = {
-      "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
       "Accept": "application/json"
     };
@@ -659,9 +815,12 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
       headers["x-user-role"] = role;
     }
 
-    // Forward cookies if available
     if (req.headers.cookie) {
       headers["Cookie"] = req.headers.cookie;
+    }
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
     }
 
     const response = await fetch(targetUrl, {
@@ -697,7 +856,6 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
     
-    // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
@@ -732,7 +890,6 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchOut`;
     
     const headers = {
-      "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
       "Accept": "application/json"
     };
@@ -741,9 +898,12 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
       headers["x-user-role"] = role;
     }
 
-    // Forward cookies if available
     if (req.headers.cookie) {
       headers["Cookie"] = req.headers.cookie;
+    }
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
     }
 
     const response = await fetch(targetUrl, {
@@ -779,7 +939,6 @@ app.get("/api/v1/attendance/todayAttendance", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
     
-    // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
@@ -793,7 +952,6 @@ app.get("/api/v1/attendance/todayAttendance", async (req, res) => {
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/todayAttendance`;
     
     const headers = {
-      "Authorization": `Bearer ${token}`,
       "Accept": "application/json"
     };
 
@@ -801,9 +959,12 @@ app.get("/api/v1/attendance/todayAttendance", async (req, res) => {
       headers["x-user-role"] = role;
     }
 
-    // Forward cookies if available
     if (req.headers.cookie) {
       headers["Cookie"] = req.headers.cookie;
+    }
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
     }
 
     const response = await fetch(targetUrl, {
@@ -833,14 +994,13 @@ app.get("/api/v1/attendance/todayAttendance", async (req, res) => {
   }
 });
 
-
+// ==================== GENERIC PROXY ENDPOINTS ====================
 
 // Generic proxy for other timesheet endpoints
 app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
   try {
     const { token, role } = extractCredentials(req);
     
-    // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
@@ -849,8 +1009,8 @@ app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
     }
 
     // Build target URL
-    const pathAfter = req.params[0] ? `/${req.params[0]}` : "";
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet${pathAfter}`;
+    const pathAfter = req.params[0] || "";
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/${pathAfter}`;
 
     console.log(`🌐 Proxying to: ${targetUrl}`);
     console.log("🔑 Token:", mask(token));
@@ -860,13 +1020,11 @@ app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
       "Content-Type": req.headers["content-type"] || "application/json"
     };
 
-    // Forward cookies directly to target API (cookie-based authentication)
     if (req.headers.cookie) {
       headers["Cookie"] = req.headers.cookie;
       console.log("🍪 Forwarding cookies to target API");
     }
 
-    // Also try Bearer token as fallback if available
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
       console.log("🔑 Also forwarding Bearer token as fallback");
@@ -903,100 +1061,7 @@ app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
   }
 });
 
-// Proxy: Get All Employees (for HR)
-app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
-  try {
-    const { token, role } = extractCredentials(req);
-
-    if (!token && !req.headers.cookie) {
-      return res.status(401).json({
-        error: "Authentication required",
-        message: "Provide Bearer token in Authorization header or authentication cookies"
-      });
-    }
-
-    // Use the same pattern as other APIs: proxy to /api/v1/timesheet/getAllEmployees
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/admin/getAllEmployees`;
-
-    const headers = {
-      "Authorization": `Bearer ${token}`,
-      "Accept": "application/json"
-    };
-    if (role) headers["x-user-role"] = role;
-    if (req.headers.cookie) headers["Cookie"] = req.headers.cookie;
-
-    const response = await fetch(targetUrl, {
-      method: "GET",
-      headers
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(response.status).json({
-        error: errorText,
-        status: response.status
-      });
-    }
-
-    const data = await response.json();
-    return res.json(data);
-
-  } catch (err) {
-    console.error("❌ Get all employees exception:", err);
-    return res.status(500).json({
-      error: String(err),
-      message: "Failed to fetch employees"
-    });
-  }
-});
-
-// Proxy: Create Timesheet Type
-app.post("/api/v1/timesheet/createTimesheetType", async (req, res) => {
-  try {
-    const { token, role } = extractCredentials(req);
-
-    if (!token && !req.headers.cookie) {
-      return res.status(401).json({
-        error: "Authentication required",
-        message: "Provide Bearer token in Authorization header or authentication cookies"
-      });
-    }
-
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheetType`;
-
-    const headers = {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "Accept": "application/json"
-    };
-    if (role) headers["x-user-role"] = role;
-    if (req.headers.cookie) headers["Cookie"] = req.headers.cookie;
-
-    const response = await fetch(targetUrl, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(req.body)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(response.status).json({
-        error: errorText,
-        status: response.status
-      });
-    }
-
-    const data = await response.json();
-    return res.json(data);
-
-  } catch (err) {
-    console.error("❌ Create timesheet type exception:", err);
-    return res.status(500).json({
-      error: String(err),
-      message: "Failed to create timesheet type"
-    });
-  }
-});
+// ==================== ERROR HANDLERS ====================
 
 // Error handler
 app.use((err, req, res, next) => {
@@ -1023,8 +1088,27 @@ app.use((req, res) => {
   });
 });
 
+// ==================== SERVER START ====================
+
 app.listen(PORT, () => {
   console.log(`✅ Timesheet API server running on http://localhost:${PORT}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
   console.log(`🌐 Proxying to: ${TIMESHEET_API_BASE}`);
+  console.log(`📍 Location validation: ${LOCATION_CONFIG.ALLOW_DYNAMIC_LOCATION ? 'Dynamic (Always Allow)' : 'Static Offices Only'}`);
+  console.log(`\n📋 Available Endpoints:`);
+  console.log(`   GET  /health`);
+  console.log(`   GET  /api/v1/auth/test`);
+  console.log(`   POST /api/v1/test`);
+  console.log(`   GET  /api/v1/office-config`);
+  console.log(`   GET  /test-location-validation`);
+  console.log(`   GET  /test-target-api`);
+  console.log(`   GET  /api/v1/admin/getAllEmployees`);
+  console.log(`   POST /api/v1/timesheet/createTimesheet`);
+  console.log(`   GET  /api/v1/timesheet/getTimesheetType`);
+  console.log(`   POST /api/v1/timesheet/createTimesheetType`);
+  console.log(`   GET  /api/v1/timesheet/getAllTimesheetOfEmployee/:id`);
+  console.log(`   POST /api/v1/attendance/punchIn`);
+  console.log(`   POST /api/v1/attendance/punchOut`);
+  console.log(`   GET  /api/v1/attendance/todayAttendance`);
+  console.log(`   ALL  /api/v1/timesheet/* (generic proxy)`);
 });
