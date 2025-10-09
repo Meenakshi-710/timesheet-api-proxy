@@ -301,9 +301,8 @@ app.get("/test-target-api", async (req, res) => {
 
 
 
-
 // Proxy to your main timesheet API
-const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
+const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "https://timesheet-api-proxy-7d5b.onrender.com";
 
 // Location validation configuration
 const LOCATION_CONFIG = {
