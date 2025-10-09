@@ -301,9 +301,9 @@ app.get("/test-target-api", async (req, res) => {
 
 
 
-
 // Proxy to your main timesheet API
-const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
+// Always use the Render server URL as the base for all proxied requests
+const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "https://timesheet-api-proxy-7d5b.onrender.com";
 
 // Location validation configuration
 const LOCATION_CONFIG = {
@@ -915,6 +915,7 @@ app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
       });
     }
 
+    // Use the same pattern as other APIs: proxy to /api/v1/timesheet/getAllEmployees
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/admin/getAllEmployees`;
 
     const headers = {
