@@ -849,7 +849,7 @@ app.get("/api/v1/employee/getAllEmployees", async (req, res) => {
     console.log("👥 Fetching all employees");
     console.log("🔑 Token:", mask(token));
 
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/employee/getAllEmployees`;
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/admin/getAllEmployees`;
 
     const headers = {
       "Authorization": `Bearer ${token}`,
