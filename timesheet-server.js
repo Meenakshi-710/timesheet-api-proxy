@@ -834,7 +834,7 @@ app.get("/api/v1/attendance/todayAttendance", async (req, res) => {
 });
 
 // Get All Employees
-app.get("/api/v1/employee/getAllEmployees", async (req, res) => {
+app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
   try {
     const { token, role } = extractCredentials(req);
 
