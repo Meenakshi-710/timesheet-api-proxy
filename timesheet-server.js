@@ -833,11 +833,11 @@ app.get("/api/v1/attendance/todayAttendance", async (req, res) => {
   }
 });
 
-// Create Timesheet Type
-app.post("/api/v1/timesheet/createTimesheetType", async (req, res) => {
+// Get All Employees
+app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
   try {
-    const { token, userId, role } = extractCredentials(req);
-    
+    const { token, role } = extractCredentials(req);
+
     // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
@@ -846,16 +846,13 @@ app.post("/api/v1/timesheet/createTimesheetType", async (req, res) => {
       });
     }
 
-    console.log("📝 Creating timesheet type");
+    console.log("👥 Fetching all employees");
     console.log("🔑 Token:", mask(token));
-    console.log("👤 User ID:", userId);
-    console.log("📋 Request body:", JSON.stringify(req.body, null, 2));
 
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheetType`;
-    
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/admin/getAllEmployees`;
+
     const headers = {
       "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
       "Accept": "application/json"
     };
 
@@ -869,14 +866,13 @@ app.post("/api/v1/timesheet/createTimesheetType", async (req, res) => {
     }
 
     const response = await fetch(targetUrl, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(req.body)
+      method: "GET",
+      headers
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("❌ Create timesheet type error:", response.status, errorText);
+      console.error("❌ Get all employees error:", response.status, errorText);
       return res.status(response.status).json({
         error: errorText,
         status: response.status
@@ -884,17 +880,19 @@ app.post("/api/v1/timesheet/createTimesheetType", async (req, res) => {
     }
 
     const data = await response.json();
-    console.log("✅ Timesheet type created successfully");
+    console.log("✅ All employees fetched successfully");
     return res.json(data);
 
   } catch (err) {
-    console.error("❌ Create timesheet type exception:", err);
+    console.error("❌ Get all employees exception:", err);
     return res.status(500).json({
       error: String(err),
-      message: "Failed to create timesheet type"
+      message: "Failed to fetch all employees"
     });
   }
 });
+
+
 
 // Generic proxy for other timesheet endpoints
 app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
