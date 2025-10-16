@@ -548,6 +548,78 @@ app.get("/api/v1/timesheet/getTimesheetType", async (req, res) => {
   }
 });
 
+// Create Timesheet Type
+app.post("/api/v1/timesheet/createTimesheetType", async (req, res) => {
+  try {
+    const { token, userId, role } = extractCredentials(req);
+    
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message: "Provide Bearer token in Authorization header or authentication cookies"
+      });
+    }
+
+    const { name } = req.body;
+    
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        error: "Name required",
+        message: "Provide name in request body"
+      });
+    }
+
+    console.log("📝 Creating timesheet type");
+    console.log("🔑 Token:", mask(token));
+    console.log("👤 User ID:", userId);
+    console.log("📋 Request body:", JSON.stringify(req.body, null, 2));
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheetType`;
+    
+    const headers = {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    };
+
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    // Forward cookies if available
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: name.trim() })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Create timesheet type error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json();
+    console.log("✅ Timesheet type created successfully");
+    return res.json(data);
+
+  } catch (err) {
+    console.error("❌ Create timesheet type exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to create timesheet type"
+    });
+  }
+});
+
 // Get All Timesheets of Employee
 app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
   try {
