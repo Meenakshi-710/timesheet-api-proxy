@@ -10,25 +10,25 @@ const PORT = process.env.PORT || 3002;
 app.use(
   cors({
     origin: [
-      "http://localhost:5173",     // Vite dev
-      "http://localhost:3002",     // Local server
-      "https://claude.ai",         // Any other web app
+      "http://localhost:5173", // Vite dev
+      "http://localhost:3002", // Local server
+      "https://claude.ai", // Any other web app
       "chrome-extension://didiikhicfjlggddnigelfbopcladhgn",
-      "chrome-extension://inaemmingkjlakjfggfifmifihicpcei"
+      "chrome-extension://inaemmingkjlakjfggfifmifihicpcei",
     ],
     credentials: true,
   })
 );
 // Body parsing middleware with error handling
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Debug middleware for body parsing
 app.use((req, res, next) => {
-  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+  if (req.method === "POST" || req.method === "PUT" || req.method === "PATCH") {
     console.log("📋 Body parsing debug:");
-    console.log("📋 Content-Type:", req.headers['content-type']);
-    console.log("📋 Body keys:", req.body ? Object.keys(req.body) : 'No body');
+    console.log("📋 Content-Type:", req.headers["content-type"]);
+    console.log("📋 Body keys:", req.body ? Object.keys(req.body) : "No body");
     console.log("📋 Body:", req.body);
   }
   next();
@@ -44,32 +44,40 @@ const mask = (s = "") => {
 // Extract credentials from request
 function extractCredentials(req) {
   // Try Bearer token first
-  let token = req.headers.authorization?.replace('Bearer ', '') || req.body?.token;
-  
+  let token =
+    req.headers.authorization?.replace("Bearer ", "") || req.body?.token;
+
   // If no Bearer token, try to extract from cookies
   if (!token && req.headers.cookie) {
-    const cookies = req.headers.cookie.split(';').reduce((acc, cookie) => {
-      const [key, value] = cookie.trim().split('=');
+    const cookies = req.headers.cookie.split(";").reduce((acc, cookie) => {
+      const [key, value] = cookie.trim().split("=");
       acc[key] = value;
       return acc;
     }, {});
-    
+
     // Try to find user data in cookies
     const userCookie = cookies.currentUser || cookies.user || cookies.authUser;
     if (userCookie) {
       try {
         const userData = JSON.parse(decodeURIComponent(userCookie));
-        token = userData.accessToken || userData.data?.accessToken || userData.token || userData.data?.token;
-        console.log("🍪 Extracted token from cookie:", token ? mask(token) : "No token found");
+        token =
+          userData.accessToken ||
+          userData.data?.accessToken ||
+          userData.token ||
+          userData.data?.token;
+        console.log(
+          "🍪 Extracted token from cookie:",
+          token ? mask(token) : "No token found"
+        );
       } catch (error) {
         console.error("❌ Error parsing user cookie:", error);
       }
     }
   }
-  
-  const userId = req.params?.id || req.body?.userId || req.headers['x-user-id'];
-  const role = req.headers['x-user-role'] || req.body?.role;
-  
+
+  const userId = req.params?.id || req.body?.userId || req.headers["x-user-id"];
+  const role = req.headers["x-user-role"] || req.body?.role;
+
   return { token, userId, role };
 }
 
@@ -89,7 +97,7 @@ app.get("/health", (req, res) => {
     status: "ok",
     message: "Timesheet API server is running",
     timestamp: new Date().toISOString(),
-    version: "1.0.0"
+    version: "1.0.0",
   });
 });
 
@@ -97,7 +105,7 @@ app.get("/health", (req, res) => {
 app.get("/api/v1/auth/test", (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
-    
+
     res.json({
       status: "ok",
       message: "Authentication test endpoint",
@@ -108,13 +116,15 @@ app.get("/api/v1/auth/test", (req, res) => {
         userId: userId || null,
         role: role || null,
         hasCookies: !!req.headers.cookie,
-        cookies: req.headers.cookie ? req.headers.cookie.split(';').map(c => c.trim().split('=')[0]) : []
-      }
+        cookies: req.headers.cookie
+          ? req.headers.cookie.split(";").map((c) => c.trim().split("=")[0])
+          : [],
+      },
     });
   } catch (error) {
     res.status(500).json({
       error: "Authentication test failed",
-      message: String(error)
+      message: String(error),
     });
   }
 });
@@ -130,13 +140,13 @@ app.post("/api/v1/test", (req, res) => {
         body: req.body,
         headers: req.headers,
         method: req.method,
-        url: req.url
-      }
+        url: req.url,
+      },
     });
   } catch (error) {
     res.status(500).json({
       error: "Test endpoint failed",
-      message: String(error)
+      message: String(error),
     });
   }
 });
@@ -147,40 +157,62 @@ app.get("/api/v1/office-config", (req, res) => {
     const config = {
       data: {
         mainOffice: {
-          latitude: process.env.DEFAULT_LATITUDE ? parseFloat(process.env.DEFAULT_LATITUDE) : null,
-          longitude: process.env.DEFAULT_LONGITUDE ? parseFloat(process.env.DEFAULT_LONGITUDE) : null,
+          latitude: process.env.DEFAULT_LATITUDE
+            ? parseFloat(process.env.DEFAULT_LATITUDE)
+            : null,
+          longitude: process.env.DEFAULT_LONGITUDE
+            ? parseFloat(process.env.DEFAULT_LONGITUDE)
+            : null,
           radius: LOCATION_CONFIG.DEFAULT_RADIUS,
           name: "Default Office",
-          configured: !!(process.env.DEFAULT_LATITUDE && process.env.DEFAULT_LONGITUDE)
+          configured: !!(
+            process.env.DEFAULT_LATITUDE && process.env.DEFAULT_LONGITUDE
+          ),
         },
         mumbaiOffice: {
-          latitude: process.env.MUMBAI_LATITUDE ? parseFloat(process.env.MUMBAI_LATITUDE) : null,
-          longitude: process.env.MUMBAI_LONGITUDE ? parseFloat(process.env.MUMBAI_LONGITUDE) : null,
-          radius: process.env.MUMBAI_RADIUS ? parseFloat(process.env.MUMBAI_RADIUS) : LOCATION_CONFIG.DEFAULT_RADIUS,
+          latitude: process.env.MUMBAI_LATITUDE
+            ? parseFloat(process.env.MUMBAI_LATITUDE)
+            : null,
+          longitude: process.env.MUMBAI_LONGITUDE
+            ? parseFloat(process.env.MUMBAI_LONGITUDE)
+            : null,
+          radius: process.env.MUMBAI_RADIUS
+            ? parseFloat(process.env.MUMBAI_RADIUS)
+            : LOCATION_CONFIG.DEFAULT_RADIUS,
           name: "Mumbai Office",
-          configured: !!(process.env.MUMBAI_LATITUDE && process.env.MUMBAI_LONGITUDE)
+          configured: !!(
+            process.env.MUMBAI_LATITUDE && process.env.MUMBAI_LONGITUDE
+          ),
         },
         additionalOffice: {
-          latitude: process.env.ADDITIONAL_LATITUDE ? parseFloat(process.env.ADDITIONAL_LATITUDE) : null,
-          longitude: process.env.ADDITIONAL_LONGITUDE ? parseFloat(process.env.ADDITIONAL_LONGITUDE) : null,
-          radius: process.env.ADDITIONAL_RADIUS ? parseFloat(process.env.ADDITIONAL_RADIUS) : LOCATION_CONFIG.DEFAULT_RADIUS,
+          latitude: process.env.ADDITIONAL_LATITUDE
+            ? parseFloat(process.env.ADDITIONAL_LATITUDE)
+            : null,
+          longitude: process.env.ADDITIONAL_LONGITUDE
+            ? parseFloat(process.env.ADDITIONAL_LONGITUDE)
+            : null,
+          radius: process.env.ADDITIONAL_RADIUS
+            ? parseFloat(process.env.ADDITIONAL_RADIUS)
+            : LOCATION_CONFIG.DEFAULT_RADIUS,
           name: "Additional Office",
-          configured: !!(process.env.ADDITIONAL_LATITUDE && process.env.ADDITIONAL_LONGITUDE)
+          configured: !!(
+            process.env.ADDITIONAL_LATITUDE && process.env.ADDITIONAL_LONGITUDE
+          ),
         },
         settings: {
           allowDynamicLocation: LOCATION_CONFIG.ALLOW_DYNAMIC_LOCATION,
           maxDistanceFromOffice: LOCATION_CONFIG.MAX_DISTANCE_FROM_OFFICE,
-          defaultRadius: LOCATION_CONFIG.DEFAULT_RADIUS
-        }
-      }
+          defaultRadius: LOCATION_CONFIG.DEFAULT_RADIUS,
+        },
+      },
     };
-    
+
     res.json(config);
   } catch (error) {
     console.error("❌ Office config error:", error);
     res.status(500).json({
       error: "Failed to get office configuration",
-      message: String(error)
+      message: String(error),
     });
   }
 });
@@ -189,12 +221,12 @@ app.get("/api/v1/office-config", (req, res) => {
 app.get("/test-location-validation", (req, res) => {
   try {
     const { lat, lng } = req.query;
-    
+
     if (!lat || !lng) {
       return res.status(400).json({
         error: "Missing coordinates",
         message: "Provide lat and lng query parameters",
-        example: "/test-location-validation?lat=26.257544&lng=73.009617"
+        example: "/test-location-validation?lat=26.257544&lng=73.009617",
       });
     }
 
@@ -204,23 +236,22 @@ app.get("/test-location-validation", (req, res) => {
     if (isNaN(latitude) || isNaN(longitude)) {
       return res.status(400).json({
         error: "Invalid coordinates",
-        message: "Latitude and longitude must be valid numbers"
+        message: "Latitude and longitude must be valid numbers",
       });
     }
 
     const validation = validateLocation(latitude, longitude);
-    
+
     res.json({
       userLocation: { latitude, longitude },
       validation,
       locationConfig: LOCATION_CONFIG,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
     console.error("❌ Location validation test error:", error);
     res.status(500).json({
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -229,11 +260,11 @@ app.get("/test-location-validation", (req, res) => {
 app.get("/test-target-api", async (req, res) => {
   try {
     console.log("🧪 Testing target API endpoints...");
-    
+
     if (!TIMESHEET_API_BASE) {
       return res.json({
         error: "TIMESHEET_API_BASE not configured",
-        targetUrl: "undefined"
+        targetUrl: "undefined",
       });
     }
 
@@ -242,7 +273,7 @@ app.get("/test-target-api", async (req, res) => {
       "/api/v1/attendance/checkin",
       "/api/v1/attendance/check-in",
       "/api/v1/attendance",
-      "/api/v1/attendance/"
+      "/api/v1/attendance/",
     ];
 
     const results = {};
@@ -256,25 +287,26 @@ app.get("/test-target-api", async (req, res) => {
         const getResponse = await fetch(testUrl, {
           method: "GET",
           headers: {
-            "User-Agent": "Timesheet-Proxy-Test/1.0.0"
-          }
+            "User-Agent": "Timesheet-Proxy-Test/1.0.0",
+          },
         });
 
         const responseText = await getResponse.text();
-        
+
         results[endpoint] = {
           status: getResponse.status,
           statusText: getResponse.statusText,
           response: responseText.substring(0, 200),
-          headers: Object.fromEntries(getResponse.headers.entries())
+          headers: Object.fromEntries(getResponse.headers.entries()),
         };
 
-        console.log(`📋 ${endpoint}: ${getResponse.status} ${getResponse.statusText}`);
-
+        console.log(
+          `📋 ${endpoint}: ${getResponse.status} ${getResponse.statusText}`
+        );
       } catch (error) {
         results[endpoint] = {
           error: error.message,
-          status: "ERROR"
+          status: "ERROR",
         };
         console.log(`❌ ${endpoint}: ${error.message}`);
       }
@@ -285,22 +317,20 @@ app.get("/test-target-api", async (req, res) => {
       testResults: results,
       summary: {
         total: testEndpoints.length,
-        successful: Object.values(results).filter(r => r.status && r.status < 400).length,
-        errors: Object.values(results).filter(r => r.error).length
-      }
+        successful: Object.values(results).filter(
+          (r) => r.status && r.status < 400
+        ).length,
+        errors: Object.values(results).filter((r) => r.error).length,
+      },
     });
-
   } catch (error) {
     console.error("❌ Test error:", error);
     res.status(500).json({
       error: error.message,
-      baseUrl: TIMESHEET_API_BASE
+      baseUrl: TIMESHEET_API_BASE,
     });
   }
 });
-
-
-
 
 // Proxy to your main timesheet API
 const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
@@ -309,28 +339,35 @@ const TIMESHEET_API_BASE = process.env.TIMESHEET_API_URL || "";
 const LOCATION_CONFIG = {
   // Default radius for location validation (in meters)
   DEFAULT_RADIUS: parseFloat(process.env.DEFAULT_RADIUS) || 100,
-  
+
   // Allow dynamic location detection
-  ALLOW_DYNAMIC_LOCATION: process.env.ALLOW_DYNAMIC_LOCATION === 'true' || true, // Default to true
-  MAX_DISTANCE_FROM_OFFICE: parseFloat(process.env.MAX_DISTANCE_FROM_OFFICE) || 5000 // 5km max distance
+  ALLOW_DYNAMIC_LOCATION: process.env.ALLOW_DYNAMIC_LOCATION === "true" || true, // Default to true
+  MAX_DISTANCE_FROM_OFFICE:
+    parseFloat(process.env.MAX_DISTANCE_FROM_OFFICE) || 5000, // 5km max distance
 };
 
 // Validate API base URL
 if (!TIMESHEET_API_BASE) {
-  console.warn("⚠️  WARNING: TIMESHEET_API_URL environment variable is not set!");
-  console.warn("⚠️  Set it with: TIMESHEET_API_URL=https://your-api-url.com node timesheet-server.js");
+  console.warn(
+    "⚠️  WARNING: TIMESHEET_API_URL environment variable is not set!"
+  );
+  console.warn(
+    "⚠️  Set it with: TIMESHEET_API_URL=https://your-api-url.com node timesheet-server.js"
+  );
 }
 
 // Utility function to calculate distance between two coordinates using Haversine formula
 function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371000; // Earth's radius in meters
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = R * c; // Distance in meters
   return distance;
 }
@@ -344,20 +381,20 @@ function validateLocation(userLatitude, userLongitude) {
       matchedLocation: "Dynamic Location",
       distance: 0,
       allowedRadius: LOCATION_CONFIG.DEFAULT_RADIUS,
-      message: "Location validated using dynamic detection"
+      message: "Location validated using dynamic detection",
     };
   }
 
   // If dynamic location is disabled, check against configured office locations
   const locations = [];
-  
+
   // Check for environment variables for office locations
   if (process.env.DEFAULT_LATITUDE && process.env.DEFAULT_LONGITUDE) {
     locations.push({
       name: "Default Office",
       latitude: parseFloat(process.env.DEFAULT_LATITUDE),
       longitude: parseFloat(process.env.DEFAULT_LONGITUDE),
-      radius: LOCATION_CONFIG.DEFAULT_RADIUS
+      radius: LOCATION_CONFIG.DEFAULT_RADIUS,
     });
   }
 
@@ -366,7 +403,8 @@ function validateLocation(userLatitude, userLongitude) {
       name: "Mumbai Office",
       latitude: parseFloat(process.env.MUMBAI_LATITUDE),
       longitude: parseFloat(process.env.MUMBAI_LONGITUDE),
-      radius: parseFloat(process.env.MUMBAI_RADIUS) || LOCATION_CONFIG.DEFAULT_RADIUS
+      radius:
+        parseFloat(process.env.MUMBAI_RADIUS) || LOCATION_CONFIG.DEFAULT_RADIUS,
     });
   }
 
@@ -375,7 +413,9 @@ function validateLocation(userLatitude, userLongitude) {
       name: "Additional Office",
       latitude: parseFloat(process.env.ADDITIONAL_LATITUDE),
       longitude: parseFloat(process.env.ADDITIONAL_LONGITUDE),
-      radius: parseFloat(process.env.ADDITIONAL_RADIUS) || LOCATION_CONFIG.DEFAULT_RADIUS
+      radius:
+        parseFloat(process.env.ADDITIONAL_RADIUS) ||
+        LOCATION_CONFIG.DEFAULT_RADIUS,
     });
   }
 
@@ -386,25 +426,25 @@ function validateLocation(userLatitude, userLongitude) {
       matchedLocation: "No Office Locations Configured",
       distance: 0,
       allowedRadius: LOCATION_CONFIG.DEFAULT_RADIUS,
-      message: "No office locations configured, allowing location"
+      message: "No office locations configured, allowing location",
     };
   }
 
   // Check against configured locations
   for (const location of locations) {
     const distance = calculateDistance(
-      userLatitude, 
-      userLongitude, 
-      location.latitude, 
+      userLatitude,
+      userLongitude,
+      location.latitude,
       location.longitude
     );
-    
+
     if (distance <= location.radius) {
       return {
         isValid: true,
         matchedLocation: location.name,
         distance: Math.round(distance),
-        allowedRadius: location.radius
+        allowedRadius: location.radius,
       };
     }
   }
@@ -412,15 +452,15 @@ function validateLocation(userLatitude, userLongitude) {
   // Find the closest location for error reporting
   let closestLocation = null;
   let minDistance = Infinity;
-  
+
   for (const location of locations) {
     const distance = calculateDistance(
-      userLatitude, 
-      userLongitude, 
-      location.latitude, 
+      userLatitude,
+      userLongitude,
+      location.latitude,
       location.longitude
     );
-    
+
     if (distance < minDistance) {
       minDistance = distance;
       closestLocation = location;
@@ -432,7 +472,11 @@ function validateLocation(userLatitude, userLongitude) {
     closestLocation: closestLocation?.name || "Unknown",
     distance: Math.round(minDistance),
     allowedRadius: closestLocation?.radius || LOCATION_CONFIG.DEFAULT_RADIUS,
-    message: `You are ${Math.round(minDistance)}m away from the nearest allowed location (${closestLocation?.name}). Maximum allowed distance is ${closestLocation?.radius}m.`
+    message: `You are ${Math.round(
+      minDistance
+    )}m away from the nearest allowed location (${
+      closestLocation?.name
+    }). Maximum allowed distance is ${closestLocation?.radius}m.`,
   };
 }
 
@@ -440,12 +484,13 @@ function validateLocation(userLatitude, userLongitude) {
 app.post("/api/v1/timesheet/createTimesheet", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
-    
+
     // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header or authentication cookies"
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
       });
     }
 
@@ -455,11 +500,11 @@ app.post("/api/v1/timesheet/createTimesheet", async (req, res) => {
     console.log("📋 Request body:", JSON.stringify(req.body, null, 2));
 
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheet`;
-    
+
     const headers = {
-      "Authorization": `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      "Accept": "application/json"
+      Accept: "application/json",
     };
 
     if (role) {
@@ -469,7 +514,7 @@ app.post("/api/v1/timesheet/createTimesheet", async (req, res) => {
     const response = await fetch(targetUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify(req.body)
+      body: JSON.stringify(req.body),
     });
 
     if (!response.ok) {
@@ -477,19 +522,18 @@ app.post("/api/v1/timesheet/createTimesheet", async (req, res) => {
       console.error("❌ Create timesheet error:", response.status, errorText);
       return res.status(response.status).json({
         error: errorText,
-        status: response.status
+        status: response.status,
       });
     }
 
     const data = await response.json();
     console.log("✅ Timesheet entry created successfully");
     return res.json(data);
-
   } catch (err) {
     console.error("❌ Create timesheet exception:", err);
     return res.status(500).json({
       error: String(err),
-      message: "Failed to create timesheet entry"
+      message: "Failed to create timesheet entry",
     });
   }
 });
@@ -498,12 +542,13 @@ app.post("/api/v1/timesheet/createTimesheet", async (req, res) => {
 app.get("/api/v1/timesheet/getTimesheetType", async (req, res) => {
   try {
     const { token, role } = extractCredentials(req);
-    
+
     // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header or authentication cookies"
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
       });
     }
 
@@ -511,10 +556,10 @@ app.get("/api/v1/timesheet/getTimesheetType", async (req, res) => {
     console.log("🔑 Token:", mask(token));
 
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/getTimesheetType`;
-    
+
     const headers = {
-      "Authorization": `Bearer ${token}`,
-      "Accept": "application/json"
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
     };
 
     if (role) {
@@ -523,27 +568,30 @@ app.get("/api/v1/timesheet/getTimesheetType", async (req, res) => {
 
     const response = await fetch(targetUrl, {
       method: "GET",
-      headers
+      headers,
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("❌ Get timesheet types error:", response.status, errorText);
+      console.error(
+        "❌ Get timesheet types error:",
+        response.status,
+        errorText
+      );
       return res.status(response.status).json({
         error: errorText,
-        status: response.status
+        status: response.status,
       });
     }
 
     const data = await response.json();
     console.log("✅ Timesheet types fetched successfully");
     return res.json(data);
-
   } catch (err) {
     console.error("❌ Get timesheet types exception:", err);
     return res.status(500).json({
       error: String(err),
-      message: "Failed to fetch timesheet types"
+      message: "Failed to fetch timesheet types",
     });
   }
 });
@@ -552,21 +600,22 @@ app.get("/api/v1/timesheet/getTimesheetType", async (req, res) => {
 app.post("/api/v1/timesheet/createTimesheetType", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
-    
+
     // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header or authentication cookies"
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
       });
     }
 
     const { name } = req.body;
-    
+
     if (!name || !name.trim()) {
       return res.status(400).json({
         error: "Name required",
-        message: "Provide name in request body"
+        message: "Provide name in request body",
       });
     }
 
@@ -576,11 +625,11 @@ app.post("/api/v1/timesheet/createTimesheetType", async (req, res) => {
     console.log("📋 Request body:", JSON.stringify(req.body, null, 2));
 
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/createTimesheetType`;
-    
+
     const headers = {
-      "Authorization": `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      "Accept": "application/json"
+      Accept: "application/json",
     };
 
     if (role) {
@@ -595,27 +644,30 @@ app.post("/api/v1/timesheet/createTimesheetType", async (req, res) => {
     const response = await fetch(targetUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify({ name: name.trim() })
+      body: JSON.stringify({ name: name.trim() }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("❌ Create timesheet type error:", response.status, errorText);
+      console.error(
+        "❌ Create timesheet type error:",
+        response.status,
+        errorText
+      );
       return res.status(response.status).json({
         error: errorText,
-        status: response.status
+        status: response.status,
       });
     }
 
     const data = await response.json();
     console.log("✅ Timesheet type created successfully");
     return res.json(data);
-
   } catch (err) {
     console.error("❌ Create timesheet type exception:", err);
     return res.status(500).json({
       error: String(err),
-      message: "Failed to create timesheet type"
+      message: "Failed to create timesheet type",
     });
   }
 });
@@ -625,19 +677,20 @@ app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
     const employeeId = req.params.id;
-    
+
     // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header or authentication cookies"
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
       });
     }
 
     if (!employeeId) {
       return res.status(400).json({
         error: "Employee ID required",
-        message: "Provide employee ID in URL path"
+        message: "Provide employee ID in URL path",
       });
     }
 
@@ -645,10 +698,10 @@ app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
     console.log("🔑 Token:", mask(token));
 
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/getAllTimesheetOfEmployee/${employeeId}`;
-    
+
     const headers = {
-      "Authorization": `Bearer ${token}`,
-      "Accept": "application/json"
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
     };
 
     if (role) {
@@ -657,27 +710,30 @@ app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
 
     const response = await fetch(targetUrl, {
       method: "GET",
-      headers
+      headers,
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("❌ Get employee timesheets error:", response.status, errorText);
+      console.error(
+        "❌ Get employee timesheets error:",
+        response.status,
+        errorText
+      );
       return res.status(response.status).json({
         error: errorText,
-        status: response.status
+        status: response.status,
       });
     }
 
     const data = await response.json();
     console.log("✅ Employee timesheets fetched successfully");
     return res.json(data);
-
   } catch (err) {
     console.error("❌ Get employee timesheets exception:", err);
     return res.status(500).json({
       error: String(err),
-      message: "Failed to fetch employee timesheets"
+      message: "Failed to fetch employee timesheets",
     });
   }
 });
@@ -686,21 +742,22 @@ app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
 app.post("/api/v1/attendance/punchIn", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
-    
+
     // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header or authentication cookies"
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
       });
     }
 
     const { latitude, longitude } = req.body;
-    
+
     if (!latitude || !longitude) {
       return res.status(400).json({
         error: "Location required",
-        message: "Provide latitude and longitude in request body"
+        message: "Provide latitude and longitude in request body",
       });
     }
 
@@ -710,7 +767,7 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
       return res.status(400).json({
         error: "Location not allowed",
         message: locationValidation.message,
-        validation: locationValidation
+        validation: locationValidation,
       });
     }
 
@@ -720,11 +777,11 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     console.log("✅ Location validated:", locationValidation.matchedLocation);
 
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchIn`;
-    
+
     const headers = {
-      "Authorization": `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      "Accept": "application/json"
+      Accept: "application/json",
     };
 
     if (role) {
@@ -739,7 +796,7 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
     const response = await fetch(targetUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify({ latitude, longitude })
+      body: JSON.stringify({ latitude, longitude }),
     });
 
     if (!response.ok) {
@@ -747,19 +804,18 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
       console.error("❌ Punch in error:", response.status, errorText);
       return res.status(response.status).json({
         error: errorText,
-        status: response.status
+        status: response.status,
       });
     }
 
     const data = await response.json();
     console.log("✅ Punch in successful");
     return res.json(data);
-
   } catch (err) {
     console.error("❌ Punch in exception:", err);
     return res.status(500).json({
       error: String(err),
-      message: "Failed to punch in"
+      message: "Failed to punch in",
     });
   }
 });
@@ -768,21 +824,22 @@ app.post("/api/v1/attendance/punchIn", async (req, res) => {
 app.post("/api/v1/attendance/punchOut", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
-    
+
     // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header or authentication cookies"
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
       });
     }
 
     const { latitude, longitude } = req.body;
-    
+
     if (!latitude || !longitude) {
       return res.status(400).json({
         error: "Location required",
-        message: "Provide latitude and longitude in request body"
+        message: "Provide latitude and longitude in request body",
       });
     }
 
@@ -792,7 +849,7 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
       return res.status(400).json({
         error: "Location not allowed",
         message: locationValidation.message,
-        validation: locationValidation
+        validation: locationValidation,
       });
     }
 
@@ -802,11 +859,11 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
     console.log("✅ Location validated:", locationValidation.matchedLocation);
 
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/punchOut`;
-    
+
     const headers = {
-      "Authorization": `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      "Accept": "application/json"
+      Accept: "application/json",
     };
 
     if (role) {
@@ -821,7 +878,7 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
     const response = await fetch(targetUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify({ latitude, longitude })
+      body: JSON.stringify({ latitude, longitude }),
     });
 
     if (!response.ok) {
@@ -829,19 +886,18 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
       console.error("❌ Punch out error:", response.status, errorText);
       return res.status(response.status).json({
         error: errorText,
-        status: response.status
+        status: response.status,
       });
     }
 
     const data = await response.json();
     console.log("✅ Punch out successful");
     return res.json(data);
-
   } catch (err) {
     console.error("❌ Punch out exception:", err);
     return res.status(500).json({
       error: String(err),
-      message: "Failed to punch out"
+      message: "Failed to punch out",
     });
   }
 });
@@ -850,12 +906,13 @@ app.post("/api/v1/attendance/punchOut", async (req, res) => {
 app.get("/api/v1/attendance/todayAttendance", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
-    
+
     // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header or authentication cookies"
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
       });
     }
 
@@ -863,10 +920,10 @@ app.get("/api/v1/attendance/todayAttendance", async (req, res) => {
     console.log("🔑 Token:", mask(token));
 
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/attendance/todayAttendance`;
-    
+
     const headers = {
-      "Authorization": `Bearer ${token}`,
-      "Accept": "application/json"
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
     };
 
     if (role) {
@@ -880,27 +937,30 @@ app.get("/api/v1/attendance/todayAttendance", async (req, res) => {
 
     const response = await fetch(targetUrl, {
       method: "GET",
-      headers
+      headers,
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("❌ Get today's attendance error:", response.status, errorText);
+      console.error(
+        "❌ Get today's attendance error:",
+        response.status,
+        errorText
+      );
       return res.status(response.status).json({
         error: errorText,
-        status: response.status
+        status: response.status,
       });
     }
 
     const data = await response.json();
     console.log("✅ Today's attendance fetched successfully");
     return res.json(data);
-
   } catch (err) {
     console.error("❌ Get today's attendance exception:", err);
     return res.status(500).json({
       error: String(err),
-      message: "Failed to fetch today's attendance"
+      message: "Failed to fetch today's attendance",
     });
   }
 });
@@ -914,7 +974,8 @@ app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header or authentication cookies"
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
       });
     }
 
@@ -924,8 +985,8 @@ app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
     const targetUrl = `${TIMESHEET_API_BASE}/api/v1/admin/getAllEmployees`;
 
     const headers = {
-      "Authorization": `Bearer ${token}`,
-      "Accept": "application/json"
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
     };
 
     if (role) {
@@ -939,7 +1000,7 @@ app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
 
     const response = await fetch(targetUrl, {
       method: "GET",
-      headers
+      headers,
     });
 
     if (!response.ok) {
@@ -947,19 +1008,18 @@ app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
       console.error("❌ Get all employees error:", response.status, errorText);
       return res.status(response.status).json({
         error: errorText,
-        status: response.status
+        status: response.status,
       });
     }
 
     const data = await response.json();
     console.log("✅ All employees fetched successfully");
     return res.json(data);
-
   } catch (err) {
     console.error("❌ Get all employees exception:", err);
     return res.status(500).json({
       error: String(err),
-      message: "Failed to fetch all employees"
+      message: "Failed to fetch all employees",
     });
   }
 });
@@ -974,21 +1034,22 @@ app.post("/api/v1/notification/send", async (req, res) => {
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header or authentication cookies"
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
       });
     }
 
     if (!recipient) {
       return res.status(400).json({
         error: "Recipient required",
-        message: "Provide recipient (employee id) in request body"
+        message: "Provide recipient (employee id) in request body",
       });
     }
 
     if (!TIMESHEET_API_BASE) {
       return res.status(500).json({
         error: "TIMESHEET_API_BASE not configured",
-        message: "Server is not configured with target timesheet API base URL"
+        message: "Server is not configured with target timesheet API base URL",
       });
     }
 
@@ -999,7 +1060,7 @@ app.post("/api/v1/notification/send", async (req, res) => {
 
     const headers = {
       "Content-Type": "application/json",
-      "Accept": "application/json"
+      Accept: "application/json",
     };
 
     if (token) {
@@ -1030,19 +1091,103 @@ app.post("/api/v1/notification/send", async (req, res) => {
       console.error("❌ Notification proxy error:", response.status, errorText);
       return res.status(response.status).json({
         error: errorText,
-        status: response.status
+        status: response.status,
       });
     }
 
     const data = await response.json().catch(() => ({}));
     console.log("✅ Notification proxied successfully");
     return res.json(data);
-
   } catch (err) {
     console.error("❌ Notification send exception:", err);
     return res.status(500).json({
       error: String(err),
-      message: "Failed to send notification"
+      message: "Failed to send notification",
+    });
+  }
+});
+
+// New: Get notifications for a recipient (proxy) - matches provided API /getNotifications/:id
+app.get("/api/v1/notification/getNotifications/:id", async (req, res) => {
+  try {
+    const { token, role } = extractCredentials(req);
+    const recipientId = req.params.id;
+
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
+      });
+    }
+
+    if (!recipientId) {
+      return res.status(400).json({
+        error: "Recipient id required",
+        message: "Provide recipient id in URL path",
+      });
+    }
+
+    if (!TIMESHEET_API_BASE) {
+      return res.status(500).json({
+        error: "TIMESHEET_API_BASE not configured",
+        message: "Server is not configured with target timesheet API base URL",
+      });
+    }
+
+    console.log("🔍 Fetching notifications for recipient:", recipientId);
+    console.log("🔑 Token:", mask(token));
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/notification/getNotifications/${recipientId}`;
+
+    const headers = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    // Forward cookies if present (cookie-based auth)
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "GET",
+      headers,
+    });
+
+    const contentType = response.headers.get("content-type") || "";
+    if (!response.ok) {
+      const text = await response.text();
+      console.error(
+        "❌ Notification fetch proxy error:",
+        response.status,
+        text
+      );
+      return res.status(response.status).json({
+        error: text,
+        status: response.status,
+      });
+    }
+
+    if (contentType.includes("application/json")) {
+      const data = await response.json();
+      return res.status(response.status).json(data);
+    } else {
+      const text = await response.text();
+      return res.status(response.status).send(text);
+    }
+  } catch (err) {
+    console.error("❌ Notification fetch exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to fetch notifications for recipient",
     });
   }
 });
@@ -1051,12 +1196,13 @@ app.post("/api/v1/notification/send", async (req, res) => {
 app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
   try {
     const { token, role } = extractCredentials(req);
-    
+
     // Check if we have either a token or cookies for authentication
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
         error: "Authentication required",
-        message: "Provide Bearer token in Authorization header or authentication cookies"
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
       });
     }
 
@@ -1068,8 +1214,8 @@ app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
     console.log("🔑 Token:", mask(token));
 
     const headers = {
-      "Accept": req.headers.accept || "application/json",
-      "Content-Type": req.headers["content-type"] || "application/json"
+      Accept: req.headers.accept || "application/json",
+      "Content-Type": req.headers["content-type"] || "application/json",
     };
 
     // Forward cookies directly to target API (cookie-based authentication)
@@ -1095,7 +1241,7 @@ app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
     const response = await fetch(targetUrl, {
       method: req.method,
       headers,
-      body
+      body,
     });
 
     const contentType = response.headers.get("content-type") || "";
@@ -1110,7 +1256,7 @@ app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
     console.error("❌ Generic proxy error:", err);
     return res.status(500).json({
       error: String(err),
-      message: "Failed to proxy request to timesheet API"
+      message: "Failed to proxy request to timesheet API",
     });
   }
 });
@@ -1123,11 +1269,11 @@ app.use((err, req, res, next) => {
     method: req.method,
     url: req.url,
     headers: req.headers,
-    body: req.body
+    body: req.body,
   });
   res.status(500).json({
     error: "Internal server error",
-    message: String(err)
+    message: String(err),
   });
 });
 
@@ -1136,7 +1282,7 @@ app.use((req, res) => {
   console.error("🚨 Route not found:", req.method, req.url);
   res.status(404).json({
     error: "Route not found",
-    message: `${req.method} ${req.url} not found`
+    message: `${req.method} ${req.url} not found`,
   });
 });
 
