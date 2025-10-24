@@ -1107,11 +1107,11 @@ app.post("/api/v1/notification/send", async (req, res) => {
   }
 });
 
-// New: Get notifications for a recipient (proxy) - matches provided API /getNotifications/:id
+// Get All Notifications of a User
 app.get("/api/v1/notification/getNotifications/:id", async (req, res) => {
   try {
     const { token, role } = extractCredentials(req);
-    const recipientId = req.params.id;
+    const userId = req.params.id;
 
     if (!token && !req.headers.cookie) {
       return res.status(401).json({
@@ -1121,10 +1121,10 @@ app.get("/api/v1/notification/getNotifications/:id", async (req, res) => {
       });
     }
 
-    if (!recipientId) {
+    if (!userId) {
       return res.status(400).json({
-        error: "Recipient id required",
-        message: "Provide recipient id in URL path",
+        error: "User ID required",
+        message: "Provide user ID in URL path",
       });
     }
 
@@ -1135,14 +1135,13 @@ app.get("/api/v1/notification/getNotifications/:id", async (req, res) => {
       });
     }
 
-    console.log("🔍 Fetching notifications for recipient:", recipientId);
+    console.log("🔔 Fetching notifications for user:", userId);
     console.log("🔑 Token:", mask(token));
 
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/notification/getNotifications/${recipientId}`;
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/notification/getNotifications/${userId}`;
 
     const headers = {
       Accept: "application/json",
-      "Content-Type": "application/json",
     };
 
     if (token) {
@@ -1151,8 +1150,6 @@ app.get("/api/v1/notification/getNotifications/:id", async (req, res) => {
     if (role) {
       headers["x-user-role"] = role;
     }
-
-    // Forward cookies if present (cookie-based auth)
     if (req.headers.cookie) {
       headers["Cookie"] = req.headers.cookie;
     }
@@ -1162,32 +1159,23 @@ app.get("/api/v1/notification/getNotifications/:id", async (req, res) => {
       headers,
     });
 
-    const contentType = response.headers.get("content-type") || "";
     if (!response.ok) {
-      const text = await response.text();
-      console.error(
-        "❌ Notification fetch proxy error:",
-        response.status,
-        text
-      );
+      const errorText = await response.text();
+      console.error("❌ Get notifications error:", response.status, errorText);
       return res.status(response.status).json({
-        error: text,
+        error: errorText,
         status: response.status,
       });
     }
 
-    if (contentType.includes("application/json")) {
-      const data = await response.json();
-      return res.status(response.status).json(data);
-    } else {
-      const text = await response.text();
-      return res.status(response.status).send(text);
-    }
+    const data = await response.json();
+    console.log("✅ Notifications fetched successfully");
+    return res.json(data);
   } catch (err) {
-    console.error("❌ Notification fetch exception:", err);
+    console.error("❌ Get notifications exception:", err);
     return res.status(500).json({
       error: String(err),
-      message: "Failed to fetch notifications for recipient",
+      message: "Failed to fetch notifications",
     });
   }
 });
