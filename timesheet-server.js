@@ -964,7 +964,88 @@ app.get("/api/v1/admin/getAllEmployees", async (req, res) => {
   }
 });
 
+// Create Notification (proxy) - send notification to a recipient (employee)
+app.post("/api/v1/notification/send", async (req, res) => {
+  try {
+    const { token, userId, role } = extractCredentials(req);
+    const { recipient, title, body } = req.body || {};
 
+    // Basic auth/cookie check like other endpoints
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message: "Provide Bearer token in Authorization header or authentication cookies"
+      });
+    }
+
+    if (!recipient) {
+      return res.status(400).json({
+        error: "Recipient required",
+        message: "Provide recipient (employee id) in request body"
+      });
+    }
+
+    if (!TIMESHEET_API_BASE) {
+      return res.status(500).json({
+        error: "TIMESHEET_API_BASE not configured",
+        message: "Server is not configured with target timesheet API base URL"
+      });
+    }
+
+    console.log("🔔 Sending notification to recipient:", recipient);
+    console.log("🔑 Token:", mask(token));
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/notification/send`;
+
+    const headers = {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    // Forward cookies if present (cookie-based auth)
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        recipient,
+        title: title || null,
+        body: body || null,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Notification proxy error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status
+      });
+    }
+
+    const data = await response.json().catch(() => ({}));
+    console.log("✅ Notification proxied successfully");
+    return res.json(data);
+
+  } catch (err) {
+    console.error("❌ Notification send exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to send notification"
+    });
+  }
+});
 
 // Generic proxy for other timesheet endpoints
 app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
