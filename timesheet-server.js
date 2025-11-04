@@ -672,6 +672,143 @@ app.post("/api/v1/timesheet/createTimesheetType", async (req, res) => {
   }
 });
 
+// Update Timesheet Entry
+app.patch("/api/v1/timesheet/updateTimesheet/:id", async (req, res) => {
+  try {
+    const { token, userId, role } = extractCredentials(req);
+    const timesheetId = req.params.id;
+
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
+      });
+    }
+
+    if (!timesheetId) {
+      return res.status(400).json({
+        error: "Timesheet ID required",
+        message: "Provide timesheet ID in URL path",
+      });
+    }
+
+    console.log("📝 Updating timesheet entry:", timesheetId);
+    console.log("🔑 Token:", mask(token));
+    console.log("📋 Request body:", JSON.stringify(req.body, null, 2));
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/updateTimesheet/${timesheetId}`;
+
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    // Forward cookies if available
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify(req.body),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Update timesheet error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status,
+      });
+    }
+
+    const data = await response.json();
+    console.log("✅ Timesheet entry updated successfully");
+    return res.json(data);
+  } catch (err) {
+    console.error("❌ Update timesheet exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to update timesheet entry",
+    });
+  }
+});
+
+// Delete Timesheet Entry
+app.delete("/api/v1/timesheet/deleteTimesheet/:id", async (req, res) => {
+  try {
+    const { token, userId, role } = extractCredentials(req);
+    const timesheetId = req.params.id;
+
+    // Check if we have either a token or cookies for authentication
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
+      });
+    }
+
+    if (!timesheetId) {
+      return res.status(400).json({
+        error: "Timesheet ID required",
+        message: "Provide timesheet ID in URL path",
+      });
+    }
+
+    console.log("🗑️ Deleting timesheet entry:", timesheetId);
+    console.log("🔑 Token:", mask(token));
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/timesheet/deleteTimesheet/${timesheetId}`;
+
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    };
+
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    // Forward cookies if available
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "DELETE",
+      headers,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Delete timesheet error:", response.status, errorText);
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status,
+      });
+    }
+
+    const data = await response.json();
+    console.log("✅ Timesheet entry deleted successfully");
+    return res.json(data);
+  } catch (err) {
+    console.error("❌ Delete timesheet exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to delete timesheet entry",
+    });
+  }
+});
+
 // Get All Timesheets of Employee
 app.get("/api/v1/timesheet/getAllTimesheetOfEmployee/:id", async (req, res) => {
   try {
