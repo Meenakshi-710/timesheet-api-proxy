@@ -68,10 +68,15 @@ function extractCredentials(req) {
           userData.data?.accessToken ||
           userData.token ||
           userData.data?.token;
-        
+
         // Extract user ID and role like React component does
-        userId = userData.data?.user?.id || userData.data?.user?._id || userData.id || userData._id || null;
-        
+        userId =
+          userData.data?.user?.id ||
+          userData.data?.user?._id ||
+          userData.id ||
+          userData._id ||
+          null;
+
         // Extract role exactly like React component does
         role = (userData?.role || userData?.data?.user?.role || null)
           ?.toString()
@@ -1355,6 +1360,7 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
     }
 
     console.log("👤 User role for broadcast:", role);
+    console.log("👤 User ID for broadcast:", userId);
 
     // Only HR users should be able to broadcast
     if (role !== "hr") {
@@ -1395,18 +1401,26 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
       headers["Cookie"] = req.headers.cookie;
     }
 
+    // Include userId in the request body like createTimesheetType does
+    const requestBody = {
+      title: title || "Timesheet Reminder",
+      body: body || "Please remember to submit your timesheets on time.",
+      userId: userId, // Include userId like other endpoints
+    };
+
     const response = await fetch(targetUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        title: title || "Timesheet Reminder",
-        body: body || "Please remember to submit your timesheets on time.",
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("❌ Broadcast notification error:", response.status, errorText);
+      console.error(
+        "❌ Broadcast notification error:",
+        response.status,
+        errorText
+      );
       return res.status(response.status).json({
         error: errorText,
         status: response.status,
