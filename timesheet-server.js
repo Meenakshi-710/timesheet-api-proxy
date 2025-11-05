@@ -1317,6 +1317,97 @@ app.get("/api/v1/notification/getNotifications/:id", async (req, res) => {
   }
 });
 
+// Broadcast Notification to All Employees
+app.post("/api/v1/notification/broadcast", async (req, res) => {
+  try {
+    const { token, userId, role } = extractCredentials(req);
+    const { title, body } = req.body || {};
+
+    // Check authentication
+    if (!token && !req.headers.cookie) {
+      return res.status(401).json({
+        error: "Authentication required",
+        message:
+          "Provide Bearer token in Authorization header or authentication cookies",
+      });
+    }
+
+    // Only HR/admin users should be able to broadcast
+    if (role !== "hr" && role !== "admin") {
+      return res.status(403).json({
+        error: "Forbidden",
+        message: "Only HR/admin users can broadcast notifications",
+      });
+    }
+
+    console.log("📢 Broadcasting notification to all employees");
+    console.log("🔑 Token:", mask(token));
+    console.log("👤 User ID:", userId);
+    console.log("📋 Broadcast content:", { title, body });
+
+    if (!TIMESHEET_API_BASE) {
+      return res.status(500).json({
+        error: "TIMESHEET_API_BASE not configured",
+        message: "Server is not configured with target timesheet API base URL",
+      });
+    }
+
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/notification/broadcast`;
+
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    if (role) {
+      headers["x-user-role"] = role;
+    }
+
+    // Forward cookies if present
+    if (req.headers.cookie) {
+      headers["Cookie"] = req.headers.cookie;
+    }
+
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        title: title || "Timesheet Reminder",
+        body:
+          body ||
+          "Please remember to submit your timesheets for the current period.",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(
+        "❌ Broadcast notification error:",
+        response.status,
+        errorText
+      );
+      return res.status(response.status).json({
+        error: errorText,
+        status: response.status,
+      });
+    }
+
+    const data = await response.json().catch(() => ({}));
+    console.log("✅ Broadcast notification sent successfully");
+    return res.json(data);
+  } catch (err) {
+    console.error("❌ Broadcast notification exception:", err);
+    return res.status(500).json({
+      error: String(err),
+      message: "Failed to send broadcast notification",
+    });
+  }
+});
+
 // Generic proxy for other timesheet endpoints
 app.all(/^\/api\/v1\/timesheet\/(.*)$/, async (req, res) => {
   try {
