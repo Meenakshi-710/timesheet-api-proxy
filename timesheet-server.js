@@ -41,12 +41,11 @@ const mask = (s = "") => {
   return `${s.slice(0, 4)}...${s.slice(-4)}`;
 };
 
-// Extract credentials from request
+// Improved extractCredentials function
 function extractCredentials(req) {
   // Try Bearer token first
   let token =
     req.headers.authorization?.replace("Bearer ", "") || req.body?.token;
-
   let userId = null;
   let role = null;
 
@@ -58,11 +57,16 @@ function extractCredentials(req) {
       return acc;
     }, {});
 
-    // Try to find user data in cookies (same as React component's getCurrentUser)
+    // Try to find user data in cookies
     const userCookie = cookies.currentUser || cookies.user || cookies.authUser;
     if (userCookie) {
       try {
         const userData = JSON.parse(decodeURIComponent(userCookie));
+        console.log(
+          "🍪 Raw user cookie data:",
+          JSON.stringify(userData, null, 2)
+        );
+
         token =
           userData.accessToken ||
           userData.data?.accessToken ||
@@ -77,10 +81,16 @@ function extractCredentials(req) {
           userData._id ||
           null;
 
-        // Extract role exactly like React component does
-        role = (userData?.role || userData?.data?.user?.role || null)
-          ?.toString()
-          .toLowerCase();
+        // Extract role - check multiple possible locations
+        role =
+          userData.role ||
+          userData.data?.user?.role ||
+          userData.data?.role ||
+          null;
+
+        if (role) {
+          role = role.toString().toLowerCase();
+        }
 
         console.log(
           "🍪 Extracted from cookie - Token:",
