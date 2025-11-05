@@ -47,6 +47,9 @@ function extractCredentials(req) {
   let token =
     req.headers.authorization?.replace("Bearer ", "") || req.body?.token;
 
+  let userId = null;
+  let role = null;
+
   // If no Bearer token, try to extract from cookies
   if (!token && req.headers.cookie) {
     const cookies = req.headers.cookie.split(";").reduce((acc, cookie) => {
@@ -55,7 +58,7 @@ function extractCredentials(req) {
       return acc;
     }, {});
 
-    // Try to find user data in cookies
+    // Try to find user data in cookies (same as React component's getCurrentUser)
     const userCookie = cookies.currentUser || cookies.user || cookies.authUser;
     if (userCookie) {
       try {
@@ -65,9 +68,22 @@ function extractCredentials(req) {
           userData.data?.accessToken ||
           userData.token ||
           userData.data?.token;
+        
+        // Extract user ID and role like React component does
+        userId = userData.data?.user?.id || userData.data?.user?._id || userData.id || userData._id || null;
+        
+        // Extract role exactly like React component does
+        role = (userData?.role || userData?.data?.user?.role || null)
+          ?.toString()
+          .toLowerCase();
+
         console.log(
-          "🍪 Extracted token from cookie:",
-          token ? mask(token) : "No token found"
+          "🍪 Extracted from cookie - Token:",
+          token ? mask(token) : "No token",
+          "User ID:",
+          userId,
+          "Role:",
+          role
         );
       } catch (error) {
         console.error("❌ Error parsing user cookie:", error);
@@ -75,8 +91,14 @@ function extractCredentials(req) {
     }
   }
 
-  const userId = req.params?.id || req.body?.userId || req.headers["x-user-id"];
-  const role = req.headers["x-user-role"] || req.body?.role;
+  // Fallback to other methods if still no role
+  if (!role) {
+    role = req.headers["x-user-role"] || req.body?.role;
+  }
+
+  if (!userId) {
+    userId = req.params?.id || req.body?.userId || req.headers["x-user-id"];
+  }
 
   return { token, userId, role };
 }
@@ -1332,43 +1354,10 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
       });
     }
 
-    // Get the current user properly like in the React component
-    let currentUser = null;
-    
-    // Try to extract user from cookies (same method as React component)
-    if (req.headers.cookie) {
-      const cookies = req.headers.cookie.split(";").reduce((acc, cookie) => {
-        const [key, value] = cookie.trim().split("=");
-        acc[key] = value;
-        return acc;
-      }, {});
-
-      // Try to find user data in cookies (same as React component's getCurrentUser)
-      const userCookie = cookies.currentUser || cookies.user || cookies.authUser;
-      if (userCookie) {
-        try {
-          currentUser = JSON.parse(decodeURIComponent(userCookie));
-          console.log("🍪 Extracted user from cookie:", currentUser ? "User found" : "No user");
-        } catch (error) {
-          console.error("❌ Error parsing user cookie:", error);
-        }
-      }
-    }
-
-    // Extract role from user data (same logic as React component)
-    let userRole = null;
-    if (currentUser) {
-      userRole = (currentUser?.role || currentUser?.data?.user?.role || null)
-        ?.toString()
-        .toLowerCase();
-    } else if (role) {
-      userRole = role.toLowerCase();
-    }
-
-    console.log("👤 User role for broadcast:", userRole);
+    console.log("👤 User role for broadcast:", role);
 
     // Only HR users should be able to broadcast
-    if (userRole !== "hr") {
+    if (role !== "hr") {
       return res.status(403).json({
         error: "Forbidden",
         message: "Only HR users can broadcast notifications",
@@ -1397,8 +1386,8 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    if (userRole) {
-      headers["x-user-role"] = userRole;
+    if (role) {
+      headers["x-user-role"] = role;
     }
 
     // Forward cookies if present
