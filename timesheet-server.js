@@ -81,7 +81,7 @@ function extractCredentials(req) {
           userData._id ||
           null;
 
-        // Extract role - check multiple possible locations
+        // Extract role - check multiple possible locations and convert to lowercase
         role =
           userData.role ||
           userData.data?.user?.role ||
@@ -89,7 +89,7 @@ function extractCredentials(req) {
           null;
 
         if (role) {
-          role = role.toString().toLowerCase();
+          role = role.toString().toLowerCase(); // Convert to lowercase for consistency
         }
 
         console.log(
@@ -109,6 +109,9 @@ function extractCredentials(req) {
   // Fallback to other methods if still no role
   if (!role) {
     role = req.headers["x-user-role"] || req.body?.role;
+    if (role) {
+      role = role.toString().toLowerCase(); // Convert to lowercase
+    }
   }
 
   if (!userId) {
@@ -1354,7 +1357,7 @@ app.get("/api/v1/notification/getNotifications/:id", async (req, res) => {
   }
 });
 
-// Broadcast Notification to All Employees
+// Broadcast Notification to All Employees (using WebSocket events)
 app.post("/api/v1/notification/broadcast", async (req, res) => {
   try {
     const { token, userId, role } = extractCredentials(req);
@@ -1372,11 +1375,14 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
     console.log("👤 User role for broadcast:", role);
     console.log("👤 User ID for broadcast:", userId);
 
-    // Only HR users should be able to broadcast
-    if (role !== "hr") {
+    // Only HR users should be able to broadcast - case insensitive check
+    if (!role || role.toString().toLowerCase() !== "hr") {
+      console.log("❌ Access denied - User role is not HR:", role);
       return res.status(403).json({
         error: "Forbidden",
         message: "Only HR users can broadcast notifications",
+        detectedRole: role,
+        requiredRole: "hr",
       });
     }
 
@@ -1411,18 +1417,24 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
       headers["Cookie"] = req.headers.cookie;
     }
 
-    // Include userId in the request body like createTimesheetType does
+    // Prepare the request body for the target API
     const requestBody = {
       title: title || "Timesheet Reminder",
       body: body || "Please remember to submit your timesheets on time.",
-      userId: userId, // Include userId like other endpoints
+      // Include socket event name as per API documentation
+      socketEvent: "notification",
     };
+
+    console.log("🌐 Sending broadcast request to:", targetUrl);
+    console.log("📦 Request body:", requestBody);
 
     const response = await fetch(targetUrl, {
       method: "POST",
       headers,
       body: JSON.stringify(requestBody),
     });
+
+    console.log("📡 Target API response status:", response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -1431,15 +1443,32 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
         response.status,
         errorText
       );
+
+      // Try to parse error response
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: errorText };
+      }
+
       return res.status(response.status).json({
-        error: errorText,
+        error:
+          errorData.error || errorData.message || "Failed to send broadcast",
         status: response.status,
+        details: errorData,
       });
     }
 
     const data = await response.json().catch(() => ({}));
     console.log("✅ Broadcast notification sent successfully");
-    return res.json(data);
+    console.log("📦 Response data:", data);
+
+    return res.json({
+      success: true,
+      message: "Broadcast notification sent successfully",
+      data: data,
+    });
   } catch (err) {
     console.error("❌ Broadcast notification exception:", err);
     return res.status(500).json({
