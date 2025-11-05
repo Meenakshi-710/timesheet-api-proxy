@@ -1332,18 +1332,13 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
       });
     }
 
-    // Only HR/admin users should be able to broadcast
-    if (role !== "hr" && role !== "admin") {
+    // Only HR users should be able to broadcast
+    if (role !== "hr") {
       return res.status(403).json({
         error: "Forbidden",
-        message: "Only HR/admin users can broadcast notifications",
+        message: "Only HR users can broadcast notifications",
       });
     }
-
-    console.log("📢 Broadcasting notification to all employees");
-    console.log("🔑 Token:", mask(token));
-    console.log("👤 User ID:", userId);
-    console.log("📋 Broadcast content:", { title, body });
 
     if (!TIMESHEET_API_BASE) {
       return res.status(500).json({
@@ -1352,7 +1347,11 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
       });
     }
 
-    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/notification/broadcast`;
+    console.log("📢 Broadcasting notification to all employees");
+    console.log("🔑 Token:", mask(token));
+    console.log("📋 Notification content:", { title, body });
+
+    const targetUrl = `${TIMESHEET_API_BASE}/broadcast`;
 
     const headers = {
       "Content-Type": "application/json",
@@ -1377,19 +1376,13 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
       headers,
       body: JSON.stringify({
         title: title || "Timesheet Reminder",
-        body:
-          body ||
-          "Please remember to submit your timesheets for the current period.",
+        body: body || "Please remember to submit your timesheets on time.",
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(
-        "❌ Broadcast notification error:",
-        response.status,
-        errorText
-      );
+      console.error("❌ Broadcast notification error:", response.status, errorText);
       return res.status(response.status).json({
         error: errorText,
         status: response.status,
