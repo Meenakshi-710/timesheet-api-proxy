@@ -1332,8 +1332,43 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
       });
     }
 
+    // Get the current user properly like in the React component
+    let currentUser = null;
+    
+    // Try to extract user from cookies (same method as React component)
+    if (req.headers.cookie) {
+      const cookies = req.headers.cookie.split(";").reduce((acc, cookie) => {
+        const [key, value] = cookie.trim().split("=");
+        acc[key] = value;
+        return acc;
+      }, {});
+
+      // Try to find user data in cookies (same as React component's getCurrentUser)
+      const userCookie = cookies.currentUser || cookies.user || cookies.authUser;
+      if (userCookie) {
+        try {
+          currentUser = JSON.parse(decodeURIComponent(userCookie));
+          console.log("🍪 Extracted user from cookie:", currentUser ? "User found" : "No user");
+        } catch (error) {
+          console.error("❌ Error parsing user cookie:", error);
+        }
+      }
+    }
+
+    // Extract role from user data (same logic as React component)
+    let userRole = null;
+    if (currentUser) {
+      userRole = (currentUser?.role || currentUser?.data?.user?.role || null)
+        ?.toString()
+        .toLowerCase();
+    } else if (role) {
+      userRole = role.toLowerCase();
+    }
+
+    console.log("👤 User role for broadcast:", userRole);
+
     // Only HR users should be able to broadcast
-    if (role !== "hr") {
+    if (userRole !== "hr") {
       return res.status(403).json({
         error: "Forbidden",
         message: "Only HR users can broadcast notifications",
@@ -1351,7 +1386,7 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
     console.log("🔑 Token:", mask(token));
     console.log("📋 Notification content:", { title, body });
 
-    const targetUrl = `${TIMESHEET_API_BASE}/broadcast`;
+    const targetUrl = `${TIMESHEET_API_BASE}/api/v1/notification/broadcast`;
 
     const headers = {
       "Content-Type": "application/json",
@@ -1362,8 +1397,8 @@ app.post("/api/v1/notification/broadcast", async (req, res) => {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    if (role) {
-      headers["x-user-role"] = role;
+    if (userRole) {
+      headers["x-user-role"] = userRole;
     }
 
     // Forward cookies if present
